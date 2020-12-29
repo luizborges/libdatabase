@@ -1,0 +1,161 @@
+/**
+ *
+ * @descripion: funciona como um header que contém todas as bibliotecas, é necessário apenas adicionar
+ * essa biblioteca para ter acesso a todas a biblioteca.
+ */
+#ifndef DATABASEPP_H
+#define DATABASEPP_H
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Includes - default libraries - C
+////////////////////////////////////////////////////////////////////////////////
+#include <math.h>
+#include <ctype.h>
+#include <time.h>
+#include <errno.h>
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Includes - default libraries - C++
+////////////////////////////////////////////////////////////////////////////////
+#include <iostream>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <map> 
+#include <deque>
+#include <memory>
+#include <vector>
+#include <string>
+#include <map>
+
+#include <pqxx/pqxx>
+
+////////////////////////////////////////////////////////////////////////////////
+// Includes - system dependent libraries
+////////////////////////////////////////////////////////////////////////////////
+#if defined(unix) || defined(__unix) || defined(__unix__) || (defined (__APPLE__) && defined (__MACH__)) // Unix (Linux, *BSD, Mac OS X)
+#include <unistd.h> // unix standard library
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <dirent.h>
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+// Includes - my libraries
+////////////////////////////////////////////////////////////////////////////////
+#include <util.hpp>
+//#include <headers/stackTracer.h>
+////////////////////////////////////////////////////////////////////////////////
+// Includes - namespace
+////////////////////////////////////////////////////////////////////////////////
+/**#define TRACE_FUNC \
+fprintf(stderr, "\n*****************************************\n");\
+fprintf(stderr, "TRACE FUNC:: \"%s\" (%d, \"%s\")\n",\
+__PRETTY_FUNCTION__, __LINE__, __FILE__);\
+fprintf(stderr, "*****************************************\n");
+*/
+////////////////////////////////////////////////////////////////////////////////
+// namespace
+////////////////////////////////////////////////////////////////////////////////
+namespace db 
+{
+
+	extern void config(const std::vector<std::string>&& conf);
+
+	////////////////////////////////////////////////////////////////////////////////
+	// general functions of library
+	////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * Tanto a função nontransaction() quanto a transaction() operam da mesma forma
+	 * segundo o mesmo dialeto:
+	 * 1. São funções do ponto de vista do banco seguras.
+	 * As conexões são abertas e fechadas, dentro da própria função e o usuário
+	 * não precisa se preocupar com isso.
+	 * 2. Após a última excecução sempre ocorre um commit. (mudar isso para poder
+	 * não perar o commit);
+	 * 3. Pode-se passar um número indefinidode queries para serem executadas,
+	 * todas compartilharam da mesma conexão e da mesma transação.
+	 * 4. É necessário marcar as queries que retornam um resultado e as que não retornam.
+	 *  a marcação é realizada com a string "return", está string deve ser passada
+	 * imediatamente antes da query que se deseja armazenar o resultado.
+	 * 5. Caso uma querie que retorna um resultado não foi recolhido, a função levantará
+	 * uma exceção.
+	 * 6. Ao final é retornado um vetor com todos os resultados, sendo que cada
+	 * posição do vetor é um resultado enviado pela query.
+	 * A ordem do resultlado no vetor, é idêntica a ordem que foi inserida no vetor.
+	 * 7. Como layout da classe, tudo que ela retorna é encapsulado por um smart_ptr
+	 * 8 Exemplos::
+	 * auto const&& result = db::nontransaction({"return", sql});
+	 * auto const& R = *result->front()->get();
+	 */
+	extern std::unique_ptr<std::vector<std::unique_ptr<pqxx::result>>>
+		nontransaction(const std::vector<std::string> v);
+	
+	
+	extern std::unique_ptr<std::vector<std::unique_ptr<pqxx::result>>>
+		transaction(const std::vector<std::string> v);
+
+
+	extern std::string quote_esc(const char *str);
+	
+	extern std::string quote_esc(const std::string&& str);
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//  error classes
+	////////////////////////////////////////////////////////////////////////////////
+
+	namespace error
+	{
+		// error classes must be defined here
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	//  end namespace cweb
+	////////////////////////////////////////////////////////////////////////////////
+} // end namespace cweb
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Implementation of templates and inline functions
+////////////////////////////////////////////////////////////////////////////////
+#endif // DATABASEPP_H
+
+////////////////////////////////////////////////////////////////////////////////
+//
+////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

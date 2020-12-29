@@ -4,15 +4,21 @@ DLIB_DIR        = $(DLIB_DIR_H)/dlibs
 DLIB_DIR_LPATH  = $(foreach dir,$(DLIB_DIR),   -L$(dir)) # add prefix to all dir
 DLIB_DIR_H_IPATH= $(foreach dir,$(DLIB_DIR_H), -I$(dir)) # add prefix to all dir
 DLIB_DIR_RPATH  = $(foreach dir,$(DLIB_DIR),   -Wl,-rpath=$(dir)) # add prefix to all dir
-DLIB_NAME       = -lerror -lstackTracer -lutilpp # insert here all dynamics libraries in DLIB_DIR_H you want to use
+DLIB_NAME       = -lutilpp #-lerror -lstackTracer # insert here all dynamics libraries in DLIB_DIR_H you want to use
 # old -lclientOutput_strMap -lroute_easy -lclientInput_manager -lcookie_manager
 # OLD -LIBCOMMON = -lerror -lmemoryManager -lstackTracer -lfileUtil -larrayList_noSync -lmap_ArrayList_noSync -labstractFactoryCommon
-CFLAGS          = -Wall -g -O3 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # Werror transforms warning in error
-DLIB_STD        = -lm -lpthread -lfcgi -lgc
+################################################
+# COMPILER AND LINKER FLAGS AND OPTIONS
+################################################
+#CFLAGS          = -Wall -g -O3 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # Werror transforms warning in error
+#CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # change O3 to Ofast -> Specify -ofast to perform -O3 optimizations plus disregard strict standards compliance.
+CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant
+DLIB_STD        = -lm -lpthread -lpqxx -lpq #-lfcgi -lgc
 DLIB            = $(DLIB_STD) $(DLIB_NAME)
-COMPILER_FLAGS  = $(CFLAGS) $(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH)
-LINK_FLAGS      = $(COMPILER_FLAGS) $(DLIB_DIR_RPATH) # use -Wl,-rpath= when the library is not in global environment
+COMPILER_FLAGS  = $(CFLAGS) #$(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) # use $(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) when the library is not in global environment
+LINK_FLAGS      = $(COMPILER_FLAGS) #$(DLIB_DIR_RPATH) # use -Wl,-rpath= when the library is not in global environment
 LINK_DLIB       = $(LINK_FLAGS) -shared -Wl,-soname,$(LIB)
+
 ################################################
 # PATHS TO EXPORT LIBRARY TO BE GLOBAL IN SYSTEM
 ################################################
@@ -21,27 +27,25 @@ DLIB_DIR_GLOBAL   = /usr/local/lib
 ################################################
 # INCLUDE LIBRARIES OF THE LIBRARY
 ################################################
-PERCENT = percent/percent.cpp
-#ROUTE           = route/route_easy/route_easy.c
-IN      = in/manager/manager.cpp in/get/get_strMap/get.cpp in/post/post_strMap/post.cpp
-OUT     = out/out_strMap/out.cpp
-COOKIE  = cookie/cookie_strMap/cookie.cpp
-SESSION = session/session_fileMap/session.cpp
+#POSTGRESQL = postgresql/postgresql.cpp
+
+BIND_BD_OBJ = bind_db_obj.cpp
+
 ################################################
 # END
 ################################################
 
 C_SRC_LIB       = 
 C_SRC_MAIN      = 
-C_SRC           = $(PERCENT) $(COOKIE) $(IN) $(SESSION) $(OUT)  
+C_SRC           = field.cpp $(BIND_BD_OBJ) #bind_db_obj.cpp #$(POSTGRESQL) 
 C_OBJ_ORI       = $(C_SRC:.cpp=.o)
 C_SRC_NAME_ONLY = $(notdir $(C_SRC))
 C_OBJ_NAME_ONLY = $(C_SRC_NAME_ONLY:.cpp=.o)
 C_OBJ_DIR       = objs/
 C_OBJ           = $(addprefix $(C_OBJ_DIR), $(C_OBJ_NAME_ONLY))
-C_LIB_H         = cweb.hpp # $(C_SRC_LIB:.cpp=.h)
+C_LIB_H         = database.hpp # $(C_SRC_LIB:.cpp=.h)
 LIB             = $(LIB_NAME_ONLY).1.0.0   # lib$(C_SRC_LIB:.cpp=.so)
-LIB_NAME_ONLY   = libcwebpp.so
+LIB_NAME_ONLY   = libdatabasepp.so
 EXE             = exe
 
 ARG1       = #-q input.dat

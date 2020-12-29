@@ -1,23 +1,5 @@
 
-
-
->> implementar o websocket (ws) na biblioteca
-
->> implementar o novo algoritmo para ler os métodos get e post (padrão) e cookie, de forma mais otimizada.
-Ou seja, ler a string deles apenas uma vez para fazer a decodificação.
-cweb::decode() -> este método tem que ser modificado para melhor performance e os métodos que chamam ele precisam mudar.
-
->> implementar try-cath em todas as funções da biblioteca.
-
->> implementar smartpointer na biblioteca.
-
->> implementar novas formas de sessão:
-	* utilizar o memmory_map ao invés das funções fopen()/read()/write()
-	isto poderá ganhar um maior ganho de performance (em certos cenários), e tornar o gerenciamento da sessão talvez mais confiável e simples.
-
->> implementar a solução para quando se deseja adicionar uma mesma tag "<?cweb #in "foo" ?>" várias vezes.
-	A solução não pode permitir que as chamadas caiam em uma auto-recursividade, ou seja, dentro do mesmo código ser chamado a mesma tag (imediatamente ou mediatamente), pois neste caso se cairia em um loop-infinito.
-
+>> inicialmente a biblioteca atenderá apenas o banco de dados postgresql
 
 
 
