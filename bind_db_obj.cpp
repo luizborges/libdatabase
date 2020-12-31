@@ -9,7 +9,7 @@ d::obj::obj(const std::string& table, const std::vector<std::string>& column)
 { try {
 	this->table = table;
 
-	for(const auto& c: column)
+	for(auto const& c: column)
 	{
 		field i;
 		col.emplace(c, i);
@@ -27,15 +27,15 @@ d::obj::print()
 	std::printf("Table name is \"%s\"\n", table.c_str());
 	std::printf("Values of the object: [\"column_name\"] \"column_value\"\n");
 	
-	for(const auto& a: col)
+	for(auto const& a: col)
 	{
-		std::printf("[\"%s\"] \"%s\" | key: \"%s\" | NOT_NULL: %s | Type: \"%s\"\n", a.first.c_str(), 
-			std::to_string(a.second.get()).c_str(), a.second.key_str(),
-			a.second.notNull ? "true" : "false", a.second.type().c_str());
+		std::printf("[\"%s\"] \"%s\" | key: \"%s\" | NOT_NULL: %s | Type: \"%s\" | Index: %d\n", a.first.c_str(), 
+			a.second.str().c_str(), a.second.key_str().c_str(),
+			a.second.notNull ? "true" : "false", a.second.type().c_str(), a.second.index());
 	}	
  } catch (const std::exception &e) { throw err(e.what()); }
 }
-
+/*
 auto // read mode
 d::obj::operator[](const std::string& column_name)
 {try {
@@ -50,69 +50,128 @@ d::obj::operator[](const std::string& column_name)
 	return i->second.get();
  } catch (const std::exception &e) { throw err(e.what()); }
 }
-
-auto& // write mode
+*/
+d::field& // write mode
 d::obj::operator[](const std::string& column_name)
-{try {
+{ try {
 	auto i = col.find(column_name);
 	if(i == col.end()) { // check if has the index
 		std::fprintf(stderr, "\nDATABASE ERROR - Key not fund - column_name: \"%s\"\n", column_name.c_str());
 		std::fprintf(stderr, "Print all values of the object.");
 		print();
-		throw err();
+		throw err("");
 	}
 	
-	return i->second.val;
+	return i->second;
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
+void
+d::obj::set(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row)
+{ try{
+	if(row.empty() == false) 
+		for(auto const& i : row) // atualiza os valores do objeto
+		{
+			auto j = col.find(i.first); // verifica se existe a chave
+			if(j == col.end()) { throw err("DATABASE: No column in object. - column name: \"%s\"", i.first); }
+			j->second.val = i.second; // atualiza o valor do objeto
+		}
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
 ////////////////////////////////////////////////////////////////////////////////
 // public functions - sql functions
 ////////////////////////////////////////////////////////////////////////////////
 void
-d::obj::insert(const std::map<std::string, std::string>& row)
+d::obj::insert(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row)
 {try {
-	if(row.empty() == false) // atualiza os valores do objeto
-		for(const auto& i : row)
-			col[i.first] = i.second;
-
+	try{ set(row); }
+	catch (const std::exception &e) { throw err("Updating the values of object"); }
+	
 	pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
       hostaddr = 127.0.0.1 port = 5432");
     pqxx::work W{C};
     
     std::string sql = "INSERT INTO " + table + " (";
     std::string val = "VALUES ("; // values of insert
-   for(const auto& i: col) // cria o sql que será enviado para o banco de dados
+   for(auto const& i: col) // cria o sql que será enviado para o banco de dados
    {	
-   		//if(i.second.val.empty() == true) // check errors
-   		//{
-   			if(i.second.key == primary_key) { 
-   				print(); throw err("Primary Key is empty string - column name: \"%s\"\n", i.first.c_str()); }
-   			if(i.second.notNull == true) {
-   				print(); throw err("NotNull value is empty string (NULL) - column name: \"%s\"\n", i.first.c_str()); }
-   			//continue; // não insere os valores vazios no sql
-   		//}
+   		try{ i.second.check(); } // check erros
+   		catch(const std::exception &e) { print(); throw err("error in column of name: \"%s\"\n", i.first.c_str()); }
+   		
+   		if(i.second.etype() == field_type::STR) {
+   			if(i.second.get().empty() == true) continue; // no insert the field in sql
+   			else val += W.quote(i.second.get()) + ","; // escaping + quote string to safe
+   		}
+   		else if(i.second.etype() == field_type::NO_TYPE) continue; // no insert the field in sql
+   		else val += i.second.str() + ","; // no need to quote - because std::variant guarantees
    		
    		sql += i.first + ",";
-   		//if()
-   		val += W.quote(i.second.get()) + ",";
    }
    
    sql.back() = ')'; // change the last character of string
    val.back() = ')'; // change the last character of string
    
    sql += " " + val + ";"; // create a sql statement
-   //std::printf("sql: \"%s\"\n", sql.c_str());
+   std::printf("sql: \"%s\"\n", sql.c_str());
    
    W.exec0(sql); // execute sql
    W.commit();
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
+void
+d::obj::select(
+	const std::string& sql_statement,
+	const std::vector<field_query_result>& select_column,
+	//const std::vector<std::string>& select_column,
+	const std::map<std::string, std::variant<D_FIELD_TYPES>>& row)
+{ try{
+	try{ set(row); }
+	catch (const std::exception &e) { throw err("Updating the values of object"); }
+	
+	pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
+      hostaddr = 127.0.0.1 port = 5432");
+    pqxx::nontransaction N{C}; // Create a non-transactional object
+	pqxx::row R{ N.exec1(sql_statement) }; // Execute SQL query
+    
+	/*print();
+	
+    std::printf("size: %lu\n", select_column.size());
+    for(auto& i : select_column) {
+    	std::printf("name: \"%s\" | stype: \"%s\"\n", i.column_name.c_str(), i.stype.c_str());
+    	//std::printf("name: \"%s\" \n", i.c_str());
+    }*/
+   
+    if(select_column.empty() == true)
+    {
+    	throw err("not implemented yet.");
+    } else {
+    	const int size = R.size() < col.size() ? R.size() : col.size();
+    	for(int i = 0; i < size; ++i)
+    	{
+    		std::string s = ""; // buffer to keep the result that will be set in this->col
+    		if(R[i].is_null() == true &&
+    			select_column[i].etype != field_type::STR) s = "0";
+    		else s = R[i].as<std::string>();
+    		
+    		auto j = col.find(select_column[i].column_name);
+    		if(j == col.end()) { // verifica se existe a chave em this->col
+    			std::fprintf(stderr, "\nDATABASE ERROR - Key not fund - column_name: \"%s\"\n",
+    				select_column[i].column_name.c_str());
+				std::fprintf(stderr, "Print all values of the object.");
+				print(); throw err("");
+    		}
+    		j->second.set() = s;
+    		j->second.str_to(select_column[i].etype); // transforma no tipo correspondente
+    	}
+    }
+
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // private functions - auxiliar functions
 ////////////////////////////////////////////////////////////////////////////////
-
 
 
 

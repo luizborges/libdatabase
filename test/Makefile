@@ -5,13 +5,20 @@ DLIB_DIR_LPATH  = $(foreach dir,$(DLIB_DIR),   -L$(dir)) # add prefix to all dir
 DLIB_DIR_H_IPATH= $(foreach dir,$(DLIB_DIR_H), -I$(dir)) # add prefix to all dir
 DLIB_DIR_RPATH  = $(foreach dir,$(DLIB_DIR),   -Wl,-rpath=$(dir)) # add prefix to all dir
 DLIB_NAME       = -lutilpp -ldatabasepp #-lerror -lfileUtil -lmemoryManager -lstackTracer -larrayList_noSync -lmap_ArrayList_noSync -labstractFactoryCommon -lcweb -lcwebpp  #-ldatabasepp#-lclientOutput_strMap -lroute_easy -lclientInput_manager -lpercent -lcookie_strMap -lsession_fileMap# insert here all dynamics libraries in DLIB_DIR_H you want to use
+
+################################################
+# COMPILER AND LINKER FLAGS AND OPTIONS
+################################################
 #CFLAGS          = -Wall -g -O3 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # Werror transforms warning in error
-CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # change O3 to Ofast -> Specify -ofast to perform O3 optimizations plus disregard strict standards compliance.
+#CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # change O3 to Ofast -> Specify -ofast to perform O3 optimizations plus disregard strict standards compliance.
+CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant
 DLIB_STD        = -lm -lpthread -lpqxx -lpq #-lfcgi -lgc 
 DLIB            = $(DLIB_STD) $(DLIB_NAME)
 COMPILER_FLAGS  = $(CFLAGS) #$(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) # use $(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) when library is not in global environment
 LINK_FLAGS      = $(COMPILER_FLAGS) #$(DLIB_DIR_RPATH) # use -Wl,-rpath= when the library is not in global environment
 LINK_DLIB       = $(LINK_FLAGS) -shared -Wl,-soname,$(LIB)
+
+
 C_SRC_LIB       = 
 C_SRC_MAIN      = main.cpp
 C_SRC           = $(C_SRC_LIB)

@@ -64,8 +64,9 @@ fprintf(stderr, "*****************************************\n");
  *	unsigned char, unsigned int, unsigned long, unsigned long long>
  * basta escrever: std::variant<D_FIELD_TYPES>
  */
-#define D_FIELD_TYPES std::monostate, std::string, bool, char, int, long, long long, \
-	unsigned char, unsigned int, unsigned long, unsigned long long
+#define D_FIELD_TYPES std::monostate, std::string, char, int, long, long long, \
+	unsigned char, unsigned int, unsigned long, unsigned long long, float, double
+//#define D_FIELD_TYPES std::monostate, std::string, double, int, char
 
 ////////////////////////////////////////////////////////////////////////////////
 // namespace
@@ -92,44 +93,123 @@ namespace d
 	 * obs: item_type = representa os tipos que o valor 
 	 */
 	enum class field_type {
-		NO_TYPE, STR, BOOL, CHAR, INT, LONG, LONG_LONG,
-	 	UCHAR, UINT, ULONG, ULONG_LONG
+		NO_TYPE, STR, CHAR, INT, LONG, LONG_LONG,
+	 	UCHAR, UINT, ULONG, ULONG_LONG, FLOAT, DOUBLE
 	};
 	
 	enum class field_key {
-		no_key, primary_key, foreign_key
+		no, primary, foreign
 	};
-		
+	
+	/**
+	 * O objetivo desta classe é ser usada de parâmetro para configurar quais serão os resultados dos campos do
+	 * resultado de uma query, ou seja, quais são os tipos esperados e que serão convertidos para a classe field.
+	 * ou seja, é utilizado para guardar qual será o tipo do valor de uma instância da classe field.
+	 * é utilizado como um sintaxe suggar e para deixar mais genérico, os parâmetros passados para as funções de sql
+	 * da classe obj, que retornam um resultado (ex: select()), para mostrar qual é o tipo de dados esperado que
+	 * deverá o resultado ser convertido para ser guardado por uma instância da classe field.
+	 */
+	struct field_query_result {
+		std::string column_name; // = "";
+		field_type etype; // = field_type::STR;
+		std::string stype;// = "xupeta";
+	 	int index;
+
+		field_query_result(const std::string& column_name, const field_type& type = field_type::STR);
+		field_query_result(const std::string& column_name, const std::string& type);
+		field_query_result(const std::string& column_name, const int type);
+	};
+	
 	struct field {
 		std::variant<D_FIELD_TYPES> val;
 	 	
 		bool notNull = false;
-	 	field_key key = no_key;
+	 	field_key key = field_key::no;
 	 	
 	 	/**
 	 	 * return a string that represents the index.
-	 	 * ex: index = 1 -> returned: "std::string"
+	 	 * ex: index = 1 -> returned: "string"
 	 	 */
-		std::string type();
+		std::string type() const;
+		
+		/**
+		 * return the representation of type in enum field_type.
+		 * example: type is string: etype() = field_type::STR | index: 1 | type() = "string" | 
+		 */
+		inline field_type etype() const { return static_cast<field_type>(val.index()); }
 		
 		/**
 		 * val.index()
 		 */
-		inline int index() { return val.index(); }
+		inline int index() const { return val.index(); }
+
+		/**
+		 * returned the key in string format.
+		 */
+		std::string key_str() const;
 		
 		/**
-		 * return the variable in type of variant.
-		 * ex: if val is int - the returned is a int variable with the value of val
-		 * if val is string - the returned is a string variable with the value of val
+		 * Check if the values is correct.
+		 * NO_TYPE - cannot be primary_key or NOT_NULL.
+		 * Empty string - cannot be primary_key or NOT_NULL.
+		 * if values is wrong throw an exception u::error
 		 */
-		auto get();
+		void check() const;
 		
+		/**
+		 * cast the string type to another type.
+		 * example: the value of field is a string "3"
+		 * afther str_to(field_type::INT) -> the value of field is a int 3
+		 * if: type = NO_TYPE -> throw error
+		 * if: type = STR -> does nothing
+		 * if: this->etype() != STR -> throw error
+		 */
+		void str_to(const field_type& type);
+		
+		void str_to(const std::string& type);
+		
+		
+		/**
+		 * create a string with the val value.
+		 * @obs: if val is string format, then returned: get<string>(val)
+		 * @obs: this function does not change the val, the val format or its value.
+		 * @obs: if the val is std::monostate is returned "" - empty string
+		 */
+		std::string str() const;
+				
 		/**
 		 * set the value of variant type.
+		 * example: var["column_name"].set() = "string";
+		 * var["column_name"].set() = 3;
 		 */
-		inline void set(auto& val) { this->val = val; };
+		inline std::variant<D_FIELD_TYPES>& set() { return val; };
 		
-		std::string key_str();
+		////////////////////////////////////////////////////////////////////////////////
+		// GET functions
+		////////////////////////////////////////////////////////////////////////////////
+		/**
+		 * return the variable in type of variant.
+		 * @obs: for string only: var["column_name"].get() = var["column_name"].str()
+		 * example -string: string str = var["column_name"].get() + "test"; or 
+		 * string str = var["column_name"].get<std::string>() + "test";
+		 * example -int: int i = var["column_name"].geti() + 5; or 
+		 * int i = var["column_name"].get<int>() + 5;
+		 * example -char: char c = var["column_name"].getc() + 5; or 
+		 * if( i == (var["column_name"].get<char>() || 'c')) ...;
+		 */
+		inline std::string get()  const {
+			try{ return std::get<std::string>(val); } catch (const std::exception &e) { throw err(e.what()); }}
+		
+		inline int geti() const {
+			try { return std::get<int>(val); } catch (const std::exception &e) { throw err(e.what()); }}
+		
+		inline char getc() const { try { return std::get<char>(val); } catch (const std::exception &e){throw err(e.what());}}
+		inline double getd() const{ try{ return std::get<double>(val); } catch (const std::exception &e){throw err(e.what());}}
+		inline float getf() const { try { return std::get<float>(val); } catch (const std::exception &e){throw err(e.what());}}
+		
+		template<typename T>
+		inline T get() const{ try{ return std::get<T>(val); } catch (const std::exception &e) { throw err(e.what()); }}
+		
 	};
 	
 	
@@ -143,7 +223,7 @@ namespace d
 	{ protected:
 	
 		std::string table;
-		std::map<std::string, item> col; // col = column -> [column_name] = column_value
+		std::map<std::string, field> col; // col = column -> [column_name] = column_value
 		
 	  public:
 	  	////////////////////////////////////////////////////////////////////////////////
@@ -164,13 +244,25 @@ namespace d
 	  	/**
 	  	 * overloading para fazer um sintaxe suggar no código.
 	  	 * retorna o valor do campo da coluna especificada.
-	  	 * como o tipo do campo é um std::variant - o valor para leitura varia
-	  	 * para uma maior flexibilidade, se utilizou auto&, para escrita, porém o tipo de retorno é sempre std::variant
-	  	 * verifica se existe a coluna na table, e retorna a coluna + o item dela.
-	  	 * caso não exista, levanta uma exeção e imprime o nome da coluna e todo os valores da tabela mais o nome dela.
+	  	 * caso não exista a coluna na classe, é lançado uma exceção.
+	  	 * exemplos:
+	  	 * escrita, atribuição do valor: var["column_name"].set() = 3;
+	  	 * leitura do valor em uma expressão: int result = 1 + var["column_name"].geti();
+	  	 * escrita, atribuição do valor: var["column_name"].set() = "string_test";
+	  	 * leitura do valor em uma expressão: string str = "init_str" + var["column_name"].get();
+	  	 * escrita, atribuição do valor: var["column_name"].set() = 3.14;
+	  	 * leitura do valor em uma expressão: int result = 1 + var["column_name"].geti();
 	  	 */
-	  	auto& operator [] (const std::string& column_name); // write mode
-	  	auto  operator [] (const std::string& column_name); // read mode
+	  	field& operator [] (const std::string& column_name); // write mode
+	  	//auto  operator [] (const std::string& column_name); // read mode
+	  	
+	  	/**
+	  	 * Updating the values of map this->col.
+	  	 * If exists a key in row that not exists in "this->col" -> throw an exception u::error
+	  	 * TODAS as chaves in row devem existir em this->col -> throw an exception u::error
+	  	 * obs: row pode ser apenas um subconjunto de this->col, não precisa conter todas as chaves de this->col.
+	  	 */
+	  	void set(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row);
 	  	
 	  	////////////////////////////////////////////////////////////////////////////////
 		// public functions - sql functions
@@ -178,26 +270,43 @@ namespace d
 	  	/**
 	  	 * performs insert a operation.
 	  	 * if a value is a empty string, this value is not put inside to sql statement.
-	  	 * @arg row: insert the row in table.
+	  	 * @arg row: change the values of obj (this->col)
 	  	 * a linha deve ser igual ou um subconjunto (column_name) do map this->col da classe.
 	  	 * caso haja alguma chave que exista na row e não em this->col, é lançado uma exceção.
 	  	 * caso haja uma ou mais chaves no this->col e não no row, não é lançado exceção.
 	  	 * os valores de this->col são atualizados, em que as chaves forem as mesmas, para ficarem iguais aos de row.
-	  	 * @obs: if a value is a empty string = null and:
+	  	 * @obs: if a value is a empty string or this->col[].etype() = filed_type::NO_TYPE and:
 	  	 * item is isPrimaryKey = true => throw an error
 	  	 * item is notNull = true => throw an error
 	  	 */
 	  	void insert(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {});
 	  	
-	  	
-	  	/*void select(
+	  	////////////////////////////////////////////////////////////////////////////////
+		// select functions
+		////////////////////////////////////////////////////////////////////////////////
+		/**
+		 * performs the select sql.
+		 * must return excately one line -> otherwise throw error
+		 * 
+		 */
+	  	void select(
+	  		const std::string& sql_statement,
+	  		//const std::vector<std::string>& select_column = {},
+	  		const std::vector<field_query_result>& select_column = {},
+	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {});
+	  	/*
+	  	void select(
 			const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {},
-			const std::vector<std::string>& result_column = {},
-			const std::vector<std::string>& );*/
+			const std::vector<std::string>& where_column = {},
+			const std::vector<std::string>& select_column = {},
+			const std::string& optional_append_in_where_statement = "",
+			const std::string& optional_append_in_select_statement = "");*/
 	  	////////////////////////////////////////////////////////////////////////////////
 		// private functions
 		////////////////////////////////////////////////////////////////////////////////
 	  	private:
+	  	
+	  	
 	};
 	
 	////////////////////////////////////////////////////////////////////////////////
