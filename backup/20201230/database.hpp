@@ -131,11 +131,9 @@ namespace d
 		 } catch (const std::exception &e) { throw err(e.what()); }} */
 	};
 	
-	class field {
-	 private:
-		std::variant<D_FIELD_TYPES> val = "";
-	 
-	 public:	
+	struct field {
+		std::variant<D_FIELD_TYPES> val;
+	 	
 		bool notNull = false;
 	 	field_key key = field_key::no;
 	 	
@@ -332,13 +330,6 @@ namespace d
 			const std::vector<std::string>& select_column = {},
 			const std::string& optional_append_in_where_statement = "",
 			const std::string& optional_append_in_select_statement = "");*/
-		
-		/**
-		 *
-		void query(
-	  		const std::string& sql_statement,
-	  		const std::vector<field_query_result>& select_column = {},
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {}); */
 	  	////////////////////////////////////////////////////////////////////////////////
 		// private functions
 		////////////////////////////////////////////////////////////////////////////////

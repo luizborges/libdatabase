@@ -74,7 +74,7 @@ d::obj::set(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row)
 		{
 			auto j = col.find(i.first); // verifica se existe a chave
 			if(j == col.end()) { throw err("DATABASE: No column in object. - column name: \"%s\"", i.first); }
-			j->second.set() = i.second; // atualiza o valor do objeto
+			j->second.val = i.second; // atualiza o valor do objeto
 		}
  } catch (const std::exception &e) { throw err(e.what()); }
 }
