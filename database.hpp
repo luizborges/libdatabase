@@ -28,7 +28,6 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include <map>
 #include <variant>
 
 #include <pqxx/pqxx>
@@ -75,7 +74,9 @@ namespace d
 {
 
 	//extern void config(const std::vector<std::string>&& conf);
-
+	////////////////////////////////////////////////////////////////////////////////
+	// interfaces of the library
+	////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////
 	// general functions of library
 	////////////////////////////////////////////////////////////////////////////////
@@ -98,8 +99,11 @@ namespace d
 		FLOAT, DOUBLE, LONG_DOUBLE
 	};
 	
-	enum class field_key {
-		no, primary, foreign
+	enum class fopt { // options to field
+		notnull, primary_key, foreign_key, // column options
+		trim, rtrim, ltrim, upper, lower, // string options
+		in, not_in, //
+		quote // execute quote - always is the last option to be executed
 	};
 	
 	/**
@@ -123,7 +127,7 @@ namespace d
 		inline field_type etype() const { return _etype; }
 		std::string type() const;
 		inline int index() const { return static_cast<int>(_etype); } // compatibilidade com std::variant
-		inline std::string get_column_name() const { return column_name; }
+		inline std::string& get_column_name() { return column_name; }
 		
 		/*inline void set_column_name(const std::string& column_name)  const {
 		 try{ if(column_name.empty()) throw err("DATABASE: column name cannot be an empty string");
@@ -134,11 +138,10 @@ namespace d
 	class field {
 	 private:
 		std::variant<D_FIELD_TYPES> val = "";
-	 
-	 public:	
-		bool notNull = false;
-	 	field_key key = field_key::no;
+		std::map<std::string, std::string> _name = {}; // column name of field
+	 	std::vector<fopt> opt = {}; // options of field
 	 	
+	 public:
 	 	/**
 	 	 * return a string that represents the index.
 	 	 * ex: index = 1 -> returned: "string"
@@ -162,12 +165,11 @@ namespace d
 		std::string key_str() const;
 		
 		/**
-		 * Check if the values is correct.
-		 * NO_TYPE - cannot be primary_key or NOT_NULL.
-		 * Empty string - cannot be primary_key or NOT_NULL.
-		 * if values is wrong throw an exception u::error
+		 * Check and trata the values to write in database.
+		 * Check and trata the values to read from database.
 		 */
-		void check() const;
+		void check_write();
+		void check_read();
 		
 		/**
 		 * cast the string type to another type.
@@ -232,9 +234,96 @@ namespace d
 		
 		template<typename T>
 		inline T get() const{ try{ return std::get<T>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-		
 	};
 	
+	enum class kind {
+		NONE, INSERT, UPDATE, SELECT, DELETE
+	};
+	
+	enum class sql_stype {
+		NOT_TYPE, STR, SQL_ARG
+	};
+	
+	enum class sql_earg {
+		value, name
+	};
+	
+	class sql_arg {
+	 private:
+		std::string _field_key = "";
+		std::string _field_name = "";
+		sql_earg _type = sql_earg::value;
+	 public:
+		sql_arg(const std::string& field_key) : _field_key(field_key)
+		{ if(field_key.empty()) throw err("field key cannot be an empty string."); }
+		
+		sql_arg(const std::string& field_key, const std::string& field_name) :
+			_field_key(field_key), _field_name(field_name), _type(sql_earg::name) {
+			if(field_key.empty()) throw err("field key cannot be an empty string.");
+			if(field_name.empty()) throw err("field name cannot be an empty string in this constructor.");
+		}
+		
+		inline std::string& key()  { return _field_key; }
+		inline std::string& name() { return _field_name; }
+		inline sql_earg&    type() { return _type; }
+	};
+	
+	class sql_result_arg {
+		private:
+			std::string _field_key = "";
+			std::string _null = "";
+		public:
+			sql_result_arg(const std::string& field_key) : _field_key(field_key)
+			{ if(field_key.empty()) throw err("field key cannot be an empty string."); }
+				
+			sql_result_arg(const std::string& field_key, const std::string& _null) 
+				: _field_key(field_key), _null(_null)
+			{	if(field_key.empty()) throw err("field key cannot be an empty string."); }
+			
+			inline std::string& key()  { return _field_key; }
+			inline std::string& null() { return _null; }
+	};
+	
+	class sql {
+	 private:
+	 	std::string id = "";
+		kind Kind = kind::NONE;
+		
+		std::vector<std::variant<std::monostate, std::string, sql_arg>>& statement;
+		std::vector<sql_result_arg>& result_arg;
+		
+	 public:
+	 	////////////////////////////////////////////////////////////////////////////////
+	 	// constructors
+	 	////////////////////////////////////////////////////////////////////////////////
+	 	/**
+	 	 * The order of arguments in string statement has to be the same order in sql_arg
+	 	 * exemples:
+	 	 * sql_statement = "SELECT nome FROM pessoa WHERE id = %s"
+	 	 * sql_arg = { {"id"} } - sql_arg.type() = field_value
+	 	 * sql_statement = "SELECT nome FROM pessoa WHERE %s = %s"
+	 	 * sql_arg = { {"id", "id"}, {"id"} } - sql_arg.type() = {field_name, field_value}
+	 	 * sql_statement = "SELECT nome FROM pessoa WHERE id = %s"
+	 	 * sql_arg = { {""} } - sql_arg.type() = no_field
+	 	 */
+		sql(const std::string& id, const kind& _kind,
+			const std::vector<std::variant<std::monostate, std::string, sql_arg>>& statement,
+			const std::vector<sql_result_arg>& result_arg = {});
+		
+		////////////////////////////////////////////////////////////////////////////////
+	 	// run functions
+	 	////////////////////////////////////////////////////////////////////////////////
+	 	void run0(
+	 		const std::map<std::string, field>& m1, const std::map<std::string, field>& m2 = {});
+
+	 	std::map<std::string, std::string> run1(
+	 		const std::map<std::string, field>& main, const std::map<std::string, field>& m2 = {});
+
+	 private:
+		////////////////////////////////////////////////////////////////////////////////
+	 	// auxiliar functions
+	 	////////////////////////////////////////////////////////////////////////////////
+	};
 	
 	/**
 	 * a ideia é transformar cada linha de uma tabela em um objeto.
@@ -242,8 +331,8 @@ namespace d
 	 * esta classe representa apenas uma linha de uma tabela
 	 * 
 	 */
-	class obj
-	{ protected:
+	class obj {
+	 protected:
 	
 		std::string table;
 		std::map<std::string, field> col; // col = column -> [column_name] = column_value
@@ -343,8 +432,6 @@ namespace d
 		// private functions
 		////////////////////////////////////////////////////////////////////////////////
 	  	private:
-	  	
-	  	
 	};
 	
 	////////////////////////////////////////////////////////////////////////////////
@@ -365,6 +452,7 @@ namespace d
 ////////////////////////////////////////////////////////////////////////////////
 // Implementation of templates and inline functions
 ////////////////////////////////////////////////////////////////////////////////
+
 #endif // DATABASEPP_H
 
 ////////////////////////////////////////////////////////////////////////////////

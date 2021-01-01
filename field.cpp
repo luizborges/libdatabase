@@ -27,19 +27,6 @@ d::field::type() const
 }
 
 std::string
-d::field::key_str() const
-{ try {
-	switch(key) 
-	{
-		case field_key::no:       return "no key";
-		case field_key::primary:  return "primary key";
-		case field_key::foreign:  return "foreign key";
-		default: throw err("no index list: %d\n", key);
-	}
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-std::string
 d::field::str() const
 { try {
 	switch(etype())
@@ -63,21 +50,16 @@ d::field::str() const
 }
 
 void
-d::field::check() const
+d::field::check_write()
 { try {
-	if(etype() == field_type::NO_TYPE) // check errors
-   	{
-   		if(key == field_key::primary) throw err("Primary Key is NO_TYPE");
-   		if(notNull == true) throw err("NotNull value is NO_TYPE (NULL)");
-   	}  	
-   	else if(etype() == field_type::STR)
-   	{
-   		if(get().empty() == true)
-   		{
-   			if(key == field_key::primary) throw err("Primary Key is an empty string");
-	   		if(notNull == true) throw err("NotNull value is empty string");
-   		}
-   	}
+	// TODO -
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+void
+d::field::check_read()
+{ try {
+	// TODO - 
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 

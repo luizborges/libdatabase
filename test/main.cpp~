@@ -20,7 +20,7 @@ int main() {
     } else {
     	std::cout << "Can't open database" << std::endl; return 1;
     } */
-    
+     /* 
 	d::obj sh {"session", {"id", "time"}};
 	
 	//sh.select("select * from head;", {{"id", d::field_type::STR}, {"time", "int"}});

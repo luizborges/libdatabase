@@ -29,28 +29,12 @@ d::obj::print()
 	
 	for(auto const& a: col)
 	{
-		std::printf("[\"%s\"] \"%s\" | key: \"%s\" | NOT_NULL: %s | Type: \"%s\" | Index: %d\n", a.first.c_str(), 
-			a.second.str().c_str(), a.second.key_str().c_str(),
-			a.second.notNull ? "true" : "false", a.second.type().c_str(), a.second.index());
+		std::fprintf(stderr, "[\"%s\"] \"%s\" | Type: \"%s\" | Index: %d\n", a.first.c_str(), 
+			a.second.str().c_str(), a.second.type().c_str(), a.second.index());
 	}	
  } catch (const std::exception &e) { throw err(e.what()); }
 }
-/*
-auto // read mode
-d::obj::operator[](const std::string& column_name)
-{try {
-	auto i = col.find(column_name);
-	if(i == col.end()) { // check if has the index
-		std::fprintf(stderr, "\nDATABASE ERROR - Key not fund - column_name: \"%s\"\n", column_name.c_str());
-		std::fprintf(stderr, "Print all values of the object.");
-		print();
-		throw err();
-	}
-	
-	return i->second.get();
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-*/
+
 d::field& // write mode
 d::obj::operator[](const std::string& column_name)
 { try {
@@ -95,7 +79,7 @@ d::obj::insert(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row)
     std::string val = "VALUES ("; // values of insert
    for(auto const& i: col) // cria o sql que será enviado para o banco de dados
    {	
-   		try{ i.second.check(); } // check erros
+   		try{ const_cast<field&>(i.second).check_write(); } // check erros
    		catch(const std::exception &e) { print(); throw err("error in column of name: \"%s\"\n", i.first.c_str()); }
    		
    		if(i.second.etype() == field_type::STR) {
@@ -143,12 +127,12 @@ d::obj::select(
     		std::string s = ""; // buffer to keep the result that will be set in this->col
     		if(R[i].is_null() == true &&
     			select_column[i].etype() != field_type::STR) s = "0";
-    		else s = R[i].as<std::string>();
+    		else if(R[i].is_null() == false) s = R[i].as<std::string>();
     		
-    		auto j = col.find(select_column[i].get_column_name());
+    		auto j = col.find(const_cast<field_query_result&>(select_column[i]).get_column_name());
     		if(j == col.end()) { // verifica se existe a chave em this->col
     			std::fprintf(stderr, "\nDATABASE ERROR - Key not fund - column_name: \"%s\"\n",
-    				select_column[i].get_column_name().c_str());
+    				const_cast<field_query_result&>(select_column[i]).get_column_name().c_str());
 				std::fprintf(stderr, "Print all values of the object.");
 				print(); throw err("");
     		}

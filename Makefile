@@ -37,7 +37,7 @@ BIND_BD_OBJ = bind_db_obj.cpp
 
 C_SRC_LIB       = 
 C_SRC_MAIN      = 
-C_SRC           = field.cpp field_query_result.cpp $(BIND_BD_OBJ) #bind_db_obj.cpp #$(POSTGRESQL)
+C_SRC           = field.cpp field_query_result.cpp sql_arg.cpp $(BIND_BD_OBJ) #bind_db_obj.cpp #$(POSTGRESQL)
 C_OBJ_ORI       = $(C_SRC:.cpp=.o)
 C_SRC_NAME_ONLY = $(notdir $(C_SRC))
 C_OBJ_NAME_ONLY = $(C_SRC_NAME_ONLY:.cpp=.o)
@@ -99,7 +99,7 @@ linker: cscrean clean add_c_src_main $(C_SRC:.cpp=.o) $(C_SRC_MAIN:.cpp=.o) mv_c
 $(C_SRC:.cpp=.o): %.o : %.cpp
 	$(info $ncompile: $<)
 	$(CC) $(COMPILER_FLAGS) -c $< -o $@ $(DLIB)
-	$(info $n)
+
 
 $(C_SRC_MAIN:.cpp=.o): %.o : %.cpp
 	$(info $ncompile: $<)
@@ -123,7 +123,8 @@ export_glib:
 	sudo ln -s $(DLIB_DIR_GLOBAL)/$(LIB) $(DLIB_DIR_GLOBAL)/$(LIB_NAME_ONLY)
 
 
-mv_c_obj: 
+mv_c_obj:
+	$(info $nmoving files to obj_dir)
 	mv $(C_OBJ_ORI) $(C_OBJ_DIR)
 
 # only in C_SRC variable is necessary to concatenate whit C_SRC_MAIN, all others just loading them again
