@@ -13,13 +13,14 @@ using namespace std;
 
 int main() {
  try {
-    pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
+ 	printf("hellow 2021\n");
+    /*pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
     	hostaddr = 127.0.0.1 port = 5432");
     if (C.is_open()) {
     	std::cout << "Opened database successfully: " << C.dbname() << std::endl;
     } else {
     	std::cout << "Can't open database" << std::endl; return 1;
-    } */
+    } 
     
 	d::obj sh {"session", {"id", "time"}};
 	
@@ -36,7 +37,7 @@ int main() {
 	
 	ss.select("SELECT CURRENT_TIMESTAMP;", {{"diff"}});
 	d::obj s2 {"head", {"id", "date"}};
-	s2.insert({{"id", "111"}, {"date", ss["diff"].get()}});
+	s2.insert({{"id", "111"}, {"date", ss["diff"].get()}});*/
 //	C.disconnect ();
  } catch (const std::exception &e) {
 	err(e.what());

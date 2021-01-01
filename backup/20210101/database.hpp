@@ -142,8 +142,6 @@ namespace d
 	 	std::vector<fopt> opt = {}; // options of field
 	 	
 	 public:
-	 
-	 	inline std::map<std::string, std::string>& name() { return _name; }
 	 	/**
 	 	 * return a string that represents the index.
 	 	 * ex: index = 1 -> returned: "string"
@@ -318,7 +316,7 @@ namespace d
 			const std::map<std::string, field>& m1, const std::map<std::string, field>& m2);
 
 	 	std::map<std::string, std::string> run1(
-	 		std::map<std::string, field>& main, const std::map<std::string, field>& m2);
+	 		const std::map<std::string, field>& main, const std::map<std::string, field>& m2);
 
 	 private:
 		////////////////////////////////////////////////////////////////////////////////
