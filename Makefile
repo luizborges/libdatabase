@@ -37,7 +37,7 @@ BIND_BD_OBJ = bind_db_obj.cpp
 
 C_SRC_LIB       = 
 C_SRC_MAIN      = 
-C_SRC           = field.cpp obj.cpp sql.cpp $(BIND_BD_OBJ) #bind_db_obj.cpp #$(POSTGRESQL)
+C_SRC           = field.cpp obj.cpp sql.cpp #$(BIND_BD_OBJ) bind_db_obj.cpp #$(POSTGRESQL)
 C_OBJ_ORI       = $(C_SRC:.cpp=.o)
 C_SRC_NAME_ONLY = $(notdir $(C_SRC))
 C_OBJ_NAME_ONLY = $(C_SRC_NAME_ONLY:.cpp=.o)

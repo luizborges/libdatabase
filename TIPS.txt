@@ -1,0 +1,5 @@
+
+
+>> - to retry time in minutes in session:
+  SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '123')))/60;
+

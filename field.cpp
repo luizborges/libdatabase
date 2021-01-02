@@ -50,20 +50,6 @@ d::field::str() const
 }
 
 void
-d::field::check_write()
-{ try {
-	// TODO -
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-void
-d::field::check_read()
-{ try {
-	// TODO - 
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-void
 d::field::str_to(const field_type& type)
 { try {
 	if(type == field_type::NO_TYPE) throw err("DATABASE: impossible convert string to NO_TYPE");
@@ -108,6 +94,20 @@ d::field::str_to(const std::string& type)
 	else if(type == "double") str_to(field_type::DOUBLE);
 	else if(type == "long double") str_to(field_type::LONG_DOUBLE);
 	else throw err("no type in list: \"%s\"\n", type.c_str());
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+void
+d::field::check_write()
+{ try {
+	// TODO -
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+void
+d::field::check_read()
+{ try {
+	// TODO - 
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 

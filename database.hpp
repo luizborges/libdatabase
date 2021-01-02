@@ -99,44 +99,19 @@ namespace d
 		FLOAT, DOUBLE, LONG_DOUBLE
 	};
 	
+	/**
+	 * by default quote is always executed in check_write(), for not executed quote use: no_quote
+	 */
 	enum class fopt { // options to field
 		notnull, primary_key, foreign_key, // column options
 		trim, rtrim, ltrim, upper, lower, // string options
-		in, not_in, //
-		quote // execute quote - always is the last option to be executed
-	};
-	
-	/**
-	 * O objetivo desta classe é ser usada de parâmetro para configurar quais serão os resultados dos campos do
-	 * resultado de uma query, ou seja, quais são os tipos esperados e que serão convertidos para a classe field.
-	 * ou seja, é utilizado para guardar qual será o tipo do valor de uma instância da classe field.
-	 * é utilizado como um sintaxe suggar e para deixar mais genérico, os parâmetros passados para as funções de sql
-	 * da classe obj, que retornam um resultado (ex: select()), para mostrar qual é o tipo de dados esperado que
-	 * deverá o resultado ser convertido para ser guardado por uma instância da classe field.
-	 */
-	class field_query_result {
-	 private:
-		std::string column_name = ""; //
-		field_type  _etype = field_type::STR; ////std::string type = "string";// int index = std::variant<..>.index()
-	 public:
-	 	// constructos of class
-		field_query_result(const std::string& column_name, const field_type& type = field_type::STR);
-		field_query_result(const std::string& column_name, const std::string& type);
-		field_query_result(const std::string& column_name, const int type);
-		
-		inline field_type etype() const { return _etype; }
-		std::string type() const;
-		inline int index() const { return static_cast<int>(_etype); } // compatibilidade com std::variant
-		inline std::string& get_column_name() { return column_name; }
-		
-		/*inline void set_column_name(const std::string& column_name)  const {
-		 try{ if(column_name.empty()) throw err("DATABASE: column name cannot be an empty string");
-		 	  this->column_name = column_name;
-		 } catch (const std::exception &e) { throw err(e.what()); }} */
+		null0, // numeric options: null0 > replace null or empty string with 0
+		in, not_in, // lists or vectors that value must be one element or not be
+		quote, no_quote // execute quote - always in check_write() - is the last option to be executed
 	};
 	
 	class field {
-	 private:
+	 protected:
 		std::variant<D_FIELD_TYPES> val = "";
 		std::map<std::string, std::string> _name = {}; // column name of field
 	 	std::vector<fopt> opt = {}; // options of field
@@ -238,123 +213,117 @@ namespace d
 		inline T get() const{ try{ return std::get<T>(val); } catch (const std::exception &e) { throw err(e.what()); }}
 	};
 	
+	/**
+	 * significa qual tipo de parser será executado
+	 * CONCAT: estilo cout
+	 * FORMAT: estilo printf - não implementado ainda
+	 */
 	enum class kind {
-		NONE, INSERT, UPDATE, SELECT, DELETE, CONCATENATION, CONCATENATION_OUT
-	};
-	
-	enum class sql_stype {
-		NOT_TYPE, STR, SQL_ARG
-	};
-	
-	enum class sql_earg {
-		value, name
-	};
-	
-	class sql_arg {
-	 private:
-		std::string _field_key = "";
-		std::string _field_name = "";
-		sql_earg _type = sql_earg::value;
-	 public:
-		sql_arg(const std::string& field_key) : _field_key(field_key)
-		{ if(field_key.empty()) throw err("field key cannot be an empty string."); }
-		
-		sql_arg(const std::string& field_key, const std::string& field_name) :
-			_field_key(field_key), _field_name(field_name), _type(sql_earg::name) {
-			if(field_key.empty()) throw err("field key cannot be an empty string.");
-			if(field_name.empty()) throw err("field name cannot be an empty string in this constructor.");
-		}
-		
-		inline std::string& key()  { return _field_key; }
-		inline std::string& name() { return _field_name; }
-		inline sql_earg&    type() { return _type; }
-	};
-	
-	class sql_result_arg {
-		private:
-			std::string _field_key = "";
-			std::string _null = "";
-		public:
-			sql_result_arg(const std::string& field_key) : _field_key(field_key)
-			{ if(field_key.empty()) throw err("field key cannot be an empty string."); }
-				
-			sql_result_arg(const std::string& field_key, const std::string& _null) 
-				: _field_key(field_key), _null(_null)
-			{	if(field_key.empty()) throw err("field key cannot be an empty string."); }
-			
-			inline std::string& key()  { return _field_key; }
-			inline std::string& null() { return _null; }
+		FORMAT, CONCAT
 	};
 	
 	class sql {
-	 private:
-		kind Kind = kind::NONE;
-		
-		std::vector<std::variant<std::monostate, std::string, sql_arg>> statement = {};
-		std::vector<sql_result_arg> result_arg = {};
+	 protected:
+		kind _kind;
+		std::vector<std::string> statement = {};
 		
 	 public:
 	 	////////////////////////////////////////////////////////////////////////////////
 	 	// constructors
 	 	////////////////////////////////////////////////////////////////////////////////
 	 	/**
-	 	 * The order of arguments in string statement has to be the same order in sql_arg
-	 	 * exemples:
-	 	 * sql_statement = "SELECT nome FROM pessoa WHERE id = %s"
-	 	 * sql_arg = { {"id"} } - sql_arg.type() = field_value
-	 	 * sql_statement = "SELECT nome FROM pessoa WHERE %s = %s"
-	 	 * sql_arg = { {"id", "id"}, {"id"} } - sql_arg.type() = {field_name, field_value}
-	 	 * sql_statement = "SELECT nome FROM pessoa WHERE id = %s"
-	 	 * sql_arg = { {""} } - sql_arg.type() = no_field
+	 	 * kind: tipo de sql - por enquanto somente o kind::concat está implementado
+	 	 * @important: como funciona o kind::concat:
+	 	 * o statement é o sql que será executado em formato bruto, ou seja, o sql
+	 	 * com combinado com as chaves do objeto que sofrerão a substituição.
+	 	 * a ideia deste tipo de concat é inspirada no cout << do c++.
+	 	 * A primeira string do vetor statement, sempre é um sql puro (pedaço dele),
+	 	 * e a outra, sempre é uma string que representa uma chave do field,
+	 	 * a próxima sempre é um outro pedaço do sql puro, e assim sucessivamente.
+	 	 * As possições pares do vetor, sempre serão ocupadas por sql puro
+	 	 * e as posições ímpares sempre por uma string que representa uma chave de um campos do objeto.
+	 	 * @obs: ao final, automaticamente se coloca o caracter ';', para demarcar o fim.
+	 	 * @obs: são aceitos posições com strings vazias, porém, se for um field_key, ele
+	 	 * ainda assim, será testado.
+	 	 * @exemplo: o std::vector<std::string>& statement = { "SELECT * from COMPANY" }
+	 	 * será transformado em: "SELECT * from COMPANY;"
+	 	 * @exemplo: o statement = { "SELECT * from ", "table" }
+	 	 * e no std::map<std::string, field>& M, contenha um tupla: ["table"] = "COMPANY"
+	 	 * será transformado em: "SELECT * from COMPANY;"
+	 	 * @obs: sempre antes de escrever no sql final, cada valor de chave, antes é chamado
+	 	 * a função: check_write() de field.
+	 	 * sempre depois de colocar os valores no campo de field, sempre é executado
+	 	 * imediatamente após a função: check_read() de field.
+	 	 * @obs: a própria função, já transforma para string as chaves que não são string (int, float, etc..)
+	 	 * por meio da função: str() da classe field.
 	 	 */
-		sql(const kind& _kind,
-			const std::vector<std::variant<std::monostate, std::string, sql_arg>>& statement,
-			const std::vector<sql_result_arg>& result_arg = {});
+		sql(const kind& _kind, const std::vector<std::string>& statement);
+		
+		sql(const std::vector<std::string>& statement); // set this->_kind = kind::CONCAT
 		
 		////////////////////////////////////////////////////////////////////////////////
-	 	// run functions
+	 	// public functions
 	 	////////////////////////////////////////////////////////////////////////////////
-	 	void run0(
-			const std::map<std::string, field>& m1, const std::map<std::string, field>& m2);
-
-	 	std::map<std::string, std::string> run1(
-	 		std::map<std::string, field>& main, const std::map<std::string, field>& m2);
+	 	/**
+	 	 * T = pqxx::work or pqxx::nontransaction
+	 	 * necessary to execute exec0 and exec1
+	 	 */
+	 	template<class T>
+	 	void run0(const std::map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec0
+		
+		template<class T>
+	 	void run1(std::map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec1
+	 	
+	 	/**
+	 	 * exibe informações da query:
+	 	 * tipo do sql: kind
+	 	 * imprime o vetor statement, com divisão, entre o que é chave e o que é sql puro.
+	 	 */
+	 	void print();
 
 	 private:
 		////////////////////////////////////////////////////////////////////////////////
 	 	// auxiliar functions
 	 	////////////////////////////////////////////////////////////////////////////////
-	 	std::string make_query(
-			const std::map<std::string, field>& m1, const std::map<std::string, field>& m2);
-		
-		std::map<std::string, std::string>
-			copy_result(const pqxx::row& From, std::map<std::string, field>& dest);
-		
-		std::string make_query_concatenation(const std::map<std::string, field>& map);
-		
-		std::string make_query_concatenation_out(
-		const std::map<std::string, field>& m1, const std::map<std::string, field>& m2);
+	 	std::string make_query(const std::map<std::string, field>& M);
+		void copy_result(const pqxx::row& Row, std::map<std::string, field>& M);
+		std::string make_query_concat(const std::map<std::string, field>& M);
+		std::string make_query_format(const std::map<std::string, field>& M);
+	};
 	
-		std::map<std::string, std::string> copy_result_concatenation_out(
-			const pqxx::row& From, std::map<std::string, field>& dest);
+	/**
+	 * Serve para controlar internamente qual tipo de runX (exec, exec1 or exec0) será executado
+	 */
+	enum class erun {
+		run, run0, run1
 	};
 	
 	/**
 	 * a ideia é transformar cada linha de uma tabela em um objeto.
 	 * pode-se fazer uma "coleção de objetos" que não é nada mais que um vetor de objetos
 	 * esta classe representa apenas uma linha de uma tabela
-	 * 
 	 */
 	class obj {
 	 protected:
-		std::map<std::string, field> _field; // col = column -> [column_name] = column_value
-		std::map<std::string, sql> _sql;
+		std::map<std::string, field> _field = {}; // col = column -> [column_name] = column_value
+		std::map<std::string, sql> _sql_real = {};
+		/**
+		 * Conjunto de sqls fakes ou reais.
+		 * cada sql fake, executa na verdade, os sqls cujos estão ele tem guardado no seu vetor.
+		 * utilizado para guardar e otimizar um conjunto de operações, agrupando-as todas sob
+		 * um mesmo nome e executando elas apenas com uma chamada.
+		 * quando um sql fake é chamado, o commit é executado somente após o último sql.
+		 * ideal para realizar roolbacks de vários sqls.
+		 */
+		std::map<std::string, std::vector<std::string>> _sql_fake = {};
 		
 	  public:
 	  	////////////////////////////////////////////////////////////////////////////////
 		// constructors
 		////////////////////////////////////////////////////////////////////////////////
-	  	obj(const std::vector<std::string>& field_key);
+	  	obj(const std::vector<std::string>& field_key = {},
+	  		const std::map<std::string, sql>& sql_real = {},
+	  		const std::map<std::string, std::vector<std::string>>& sql_fake = {});
 	
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - auxiliar functions
@@ -387,63 +356,53 @@ namespace d
 	  	 * TODAS as chaves in row devem existir em this->col -> throw an exception u::error
 	  	 * obs: row pode ser apenas um subconjunto de this->col, não precisa conter todas as chaves de this->col.
 	  	 */
-	  	void set(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row);
+	  	void set(const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_);
 	  	
 	  	////////////////////////////////////////////////////////////////////////////////
 		// public functions - sql functions
 		////////////////////////////////////////////////////////////////////////////////
-	  	/**
-	  	 * performs insert a operation.
-	  	 * if a value is a empty string, this value is not put inside to sql statement.
-	  	 * @arg row: change the values of obj (this->col)
-	  	 * a linha deve ser igual ou um subconjunto (column_name) do map this->col da classe.
-	  	 * caso haja alguma chave que exista na row e não em this->col, é lançado uma exceção.
-	  	 * caso haja uma ou mais chaves no this->col e não no row, não é lançado exceção.
-	  	 * os valores de this->col são atualizados, em que as chaves forem as mesmas, para ficarem iguais aos de row.
-	  	 * @obs: if a value is a empty string or this->col[].etype() = filed_type::NO_TYPE and:
-	  	 * item is isPrimaryKey = true => throw an error
-	  	 * item is notNull = true => throw an error
-	  	 */
-	  	//void insert(const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {});
-	  	
-	  	////////////////////////////////////////////////////////////////////////////////
-		// select functions
-		////////////////////////////////////////////////////////////////////////////////
 		/**
-		 * performs the select sql.
-		 * must return excately one line -> otherwise throw error
-		 * o row atualiza os valores de this->col, antes da execução do select.
-		 * todas as chaves de row devem conter em this->col, se não ocorre erro, o contrário
-		 * não é verdadeiro:
-		 * os resultados do select serão colocados em ordem nos campos de this->col,
-		 * indicados no vector select_column.
-		 * A função verifica qual é menor, resultado do select ou select_column, e
-		 * apenas insere no this->col, o menor resultado.
-		 * exemplo: caso o resulado do select tenha apenas 2 campos, e o vector select_column tenha 3 de tamanho,
-		 * será atualizdo apenas as duas primeiras chaves em this->col, indicados no vector select_column
-		 * que contem os dois primeiros campos do select.
-		 *
-	  	void select(
-	  		const std::string& sql_statement,
-	  		const std::vector<field_query_result>& select_column = {},
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {});
-	  	
-	  	void select(
-			const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {},
-			const std::vector<std::string>& where_column = {},
-			const std::vector<std::string>& select_column = {},
-			const std::string& optional_append_in_where_statement = "",
-			const std::string& optional_append_in_select_statement = "");
-		
-		
-		void query(
-	  		const std::string& sql_statement,
-	  		const std::vector<field_query_result>& select_column = {},
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& row = {}); */
+		 * O 'n' antes do run, significa que é o tipo de  transação é pqxx::nontransaction
+		 * Somente o run, significa que é o tipo de  transação é pqxx::work
+		 * O '0' depois do run, significa que é executado exec0 > não tem resposta do banco
+		 * O '1' depois do run, significa que é executado o exec1 > a reposta é apenas 1 linha
+		 * Caso a resposta não seja do tamanho esperado, levanta uma exceção.
+		 */
+	  	void run0(const std::vector<std::string>& sql_key,
+	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+		void run1(const std::vector<std::string>& sql_key,
+	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+	  	void nrun0(const std::vector<std::string>& sql_key,
+	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+	  	void nrun1(const std::vector<std::string>& sql_key,
+	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
 	  	////////////////////////////////////////////////////////////////////////////////
 		// private functions
 		////////////////////////////////////////////////////////////////////////////////
 	  	private:
+	  	template<class T>
+		void xrunX(const std::vector<std::string>& sql_key, const erun Type, T& W);
+		
+		/**
+		 * verifica se existe chave iguais nos maps: _sql_real and _sql_fake
+		 */
+		void check_equal_key_sql_real_fake();
+	};
+	
+	
+	/**
+	 * Agrupa um conjunto de objetos.
+	 * Para ser utilizado quando um sql retornar mais de uma resultado.
+	 */
+	class set {
+	 protected:
+	 	obj _root;
+	 	std::vector<obj> _obj;
+		std::map<std::string, std::sql> _sql_real;
+		std::map<std::string, std::sql> _sql_fake;
+	
+	 public:
+	 	
 	};
 	
 	////////////////////////////////////////////////////////////////////////////////
@@ -464,6 +423,48 @@ namespace d
 ////////////////////////////////////////////////////////////////////////////////
 // Implementation of templates and inline functions
 ////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// class sql
+////////////////////////////////////////////////////////////////////////////////
+template<class T>
+void d::sql::run0(const std::map<std::string, field>& M, T& W)
+{ try {
+    W.exec0( make_query(M) );
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<class T>
+void d::sql::run1(std::map<std::string, field>& M, T& W)
+{ try {
+    pqxx::row R{ W.exec1( make_query(M) ) };
+    copy_result(R, M);
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// class sql
+////////////////////////////////////////////////////////////////////////////////
+template<class T>
+void d::obj::xrunX(const std::vector<std::string>& sql_key, const erun Type, T& W)
+{ try {
+	for(auto const& key : sql_key)
+    {
+    	const auto v = _sql_fake.find(key);
+    	if(v != _sql_fake.end()) xrunX(v->second, Type, W); // chamada recursiva, para fazer a busca em profundidade.
+    	else {
+	    	const auto SQL = _sql_real.find(key);
+    		if(SQL == _sql_real.end()) {
+    			print(); throw err("no found sql_key in field of object. - sql_key: \"%s\"", key); }
+    	
+    		switch(Type) {
+	    		case erun::run0: SQL->second.run0(_field, W); break;
+	    		case erun::run1: SQL->second.run1(_field, W); break;
+	    		default: throw err("enumeration erun index does not exists: %d", static_cast<int>(Type)); }
+    	}
+    }
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
 
 #endif // DATABASEPP_H
 
