@@ -134,7 +134,7 @@ namespace d
 	 * @implemented check_read: null0 notnull
 	 */
 	enum class fopt { // options to field
-		notnull, primary_key, foreign_key, // column options
+		notnull, //primary_key, foreign_key, // column options
 		trim, rtrim, ltrim, upper, lower, // string options
 		null0, // numeric options: null0 > replace null or empty string with 0
 		in, not_in, // lists or vectors that value must be one element or not be
@@ -170,6 +170,19 @@ namespace d
 		
 	 	// return the conteiner that get the names of this field
 	 	inline std::unordered_set<std::string>& name() { return _name; }
+	 	
+	 	// return the conteiner that get the names of this field
+	 	inline std::vector<fopt>& opt() { return _opt; }
+	 	
+	 	/**
+	 	 * print the options of field
+	 	 */
+	 	void print_opt() const;
+	 	
+	 	/**
+	 	 * print the name of fields
+	 	 */
+	 	void print_name() const;
 	 	
 	 	/**
 	 	 * return a string that represents the index.
@@ -401,7 +414,7 @@ namespace d
 	class obj {
 	 protected:
 		std::unordered_map<std::string, field> _field = {}; // col = column -> [column_name] = column_value
-		std::vector<std::string> _primary_key = {};
+		std::unordered_set<std::string> _primary_key = {};
 		std::unordered_map<std::string, sql> _sql_real = {};
 		/**
 		 * Conjunto de sqls fakes ou reais.
@@ -417,23 +430,29 @@ namespace d
 	  	////////////////////////////////////////////////////////////////////////////////
 		// constructors
 		////////////////////////////////////////////////////////////////////////////////
-	  	obj(const std::vector<std::string>& field_key = {},
+		obj() {}
+		
+	  	obj(const std::vector<std::string>& field_key,
+		  	const std::unordered_set<std::string> primary_key = {},
 	  		const std::unordered_map<std::string, sql>& sql_real = {},
 	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
 	  	
 	  	obj(const std::unordered_map<std::string, field>& _field,
+	  		const std::unordered_set<std::string> primary_key = {},
 	  		const std::unordered_map<std::string, sql>& sql_real = {},
 	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
 	
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - auxiliar functions
-		////////////////////////////////////////////////////////////////////////////////  	
+		////////////////////////////////////////////////////////////////////////////////
+		inline std::unordered_set<std::string>& primary_key() { return _primary_key; };
+		
 		/**
 		 * print all values of the class - use printf
 		 * - table
 		 * - [column_name] = "column_value" - std::unordered_map<std::string, std::string> col;
 		 */
-	  	void print();
+	  	void print() const;
 	  	
 	  	/**
 	  	 * overloading para fazer um sintaxe suggar no código.
@@ -447,8 +466,8 @@ namespace d
 	  	 * escrita, atribuição do valor: var["column_name"].set() = 3.14;
 	  	 * leitura do valor em uma expressão: int result = 1 + var["column_name"].geti();
 	  	 */
-	  	field& operator [] (const std::string& column_name); // write mode
-	  	//auto  operator [] (const std::string& column_name); // read mode
+	  	field& operator [] (const std::string& column_name);   // write mode
+	  	const field& operator[](const std::string& key) const; // read mode
 	  	
 	  	/**
 	  	 * Updating the values of map this->col.
@@ -457,6 +476,41 @@ namespace d
 	  	 * obs: row pode ser apenas um subconjunto de this->col, não precisa conter todas as chaves de this->col.
 	  	 */
 	  	void set(const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_);
+	  	
+	  	////////////////////////////////////////////////////////////////////////////////
+		// public functions - for range interators - for work with for range loop
+		////////////////////////////////////////////////////////////////////////////////
+		/**
+		 * This code is for use:
+		 * obj O
+		 * for(auto const& it : O)
+		 * where it is the one element of std::unordered_map<std::string, field> _field
+		 * for(auto const& it : O) = for(auto const& it : O._field)
+		 */
+		 inline std::unordered_map<std::string, field>::iterator begin(){
+        	return _field.begin();
+		 }
+	     inline std::unordered_map<std::string, field>::iterator end(){
+    	    return _field.end();
+    	 }
+    	 inline std::unordered_map<std::string, field>::const_iterator begin() const {
+    	    return _field.begin();
+    	 }
+    	 inline std::unordered_map<std::string, field>::const_iterator end() const {
+    	    return _field.end();
+    	 }
+    	 /**
+    	  * Essas duas funções abaixo são importantes, para o interador, entretando
+    	  * eu já tenho feito elas acima, pois adicionei checks para elas.
+    	  * deixei elas pois são do código original que eu copei na internet
+    	  * e caso queira reusar o original tenho elas
+    	  *
+    	 inline const int& operator[](const std::string& key) const {
+    	    return _field.at(key);
+    	 }
+    	 inline int& operator[](const std::string& key) {
+    	    return _field[key];
+    	 }*/
 	  	
 	  	////////////////////////////////////////////////////////////////////////////////
 		// public functions - sql functions
@@ -497,23 +551,62 @@ namespace d
 	 class table {
 	  protected:
 	  	std::vector<obj> _obj = {};
-	  	//std::unordered_map<std::string, std::unordered_multimap<std::string, int i>> _primary_key;
-		std::unordered_map<std::string, sql> _sql_real = {};
-		std::unordered_map<std::string, std::vector<std::string>> _sql_fake = {};
+	  	/**
+	  	 * Realiza 
+	  	 */
+	  	//std::unordered_map<std::string, std::unordered_multimap<std::string, int>> _primary_key;
 		
 	  public:
 	  	////////////////////////////////////////////////////////////////////////////////
 		// constructors
 		////////////////////////////////////////////////////////////////////////////////
-	  	table(const std::vector<std::string>& field_key = {},
-	  		const std::unordered_map<std::string, sql>& sql_real = {},
-	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
+	  	table(const obj& Obj);
 	
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - auxiliar functions
 		////////////////////////////////////////////////////////////////////////////////  	
 		inline size_t size()  const {
 			try{ return _obj.size(); } catch (const std::exception &e) { throw err(e.what()); }}
+		
+		inline std::vector<obj>& vobj() {
+			try{ return _obj; } catch (const std::exception &e) { throw err(e.what()); }}
+		
+		inline obj& move(const obj& Obj) {
+			try { _obj.push_back(std::move(Obj)); return _obj.back(); } catch(const std::exception &e) { throw err(e.what()); }}
+		
+		obj& move(const obj& Obj, const size_t idx);
+
+		void init(const obj& Obj);
+		void refresh();
+		//void update();
+		//void upgrade();
+		////////////////////////////////////////////////////////////////////////////////
+		// public functions - overloading operators
+		////////////////////////////////////////////////////////////////////////////////
+		obj& operator[] (const size_t idx);
+		
+		////////////////////////////////////////////////////////////////////////////////
+		// public functions - for range interators - for work with for range loop
+		////////////////////////////////////////////////////////////////////////////////
+		/**
+		 * This code is for use:
+		 * table T
+		 * for(auto const& it : T)
+		 * where it is the one element of vector<obj> _obj
+		 * for(auto const& it : T) = for(auto const& it : T._obj)
+		 */
+		inline std::vector<obj>::iterator begin(){
+        	return _obj.begin();
+    	}
+	    inline std::vector<obj>::iterator end(){
+    		return _obj.end();
+    	}
+    	inline std::vector<obj>::const_iterator begin() const {
+    		return _obj.begin();
+    	}
+    	inline std::vector<obj>::const_iterator end() const {
+    	    return _obj.end();
+    	}
 	 };
 	
 	////////////////////////////////////////////////////////////////////////////////
@@ -559,6 +652,7 @@ void d::sql::run1(std::unordered_map<std::string, field>& M, T& W)
     V.push_back(std::move(M));
     copy_result(R, V);
     M = std::move(V[0]);
+    //copy_result(R, { std::forward(M) }); // TODO - erro - fazer esse código funcionar
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 

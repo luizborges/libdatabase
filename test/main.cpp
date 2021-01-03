@@ -24,7 +24,7 @@ int main() {
     pqxx::nontransaction N(C);
     CB = (pqxx::connection_base*)&N;
     string s1 = "SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '"; //'1')))/60 as time";
-	d::obj sh {{ {"id", { {}, {}} }, {"time", {{}, {" ", "ate", "date"}} }}, 
+	d::obj sh {{ {"id", { {}, {}} }, {"time", {{}, {" ", "ate", "date"}} }}, {},
 		//{{"init", { d::kind::CONCAT, {"select id, date as time from head where id = '", "id", "'"}}}}};
 		{{"init", { d::kind::CONCAT, {"select id, date from head where id = ", "id", ""}}}}};
 		//{{"init", { d::kind::CONCAT, {"select * from head where id = '", "id", "'"}}}}};
@@ -55,6 +55,16 @@ int main() {
 	//string str = ((pqxx::connection_base*)CB)->quote("xupeta");
 	string str = CB->quote("xus");
 	printf("%s\n", str.c_str());
+	
+	d::table table(sh);
+	printf("[%s]: \"%s\"\n", "id", table[0]["id"].get().c_str());
+	printf("[%s]: \"%s\"\n", "time", table[0]["time"].get().c_str());
+	
+	printf("for range\n");
+	for(auto& o : table) {
+		for(auto& f : o)
+			printf("[%s]: \"%s\"\n", f.first.c_str(), f.second.get().c_str());
+	}
 	
 	/*
 	d::obj ss {"session", {"diff"}};

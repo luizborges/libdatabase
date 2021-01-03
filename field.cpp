@@ -26,8 +26,8 @@ d::field::init_opt(const std::vector<std::string>& VOpt)
 	for(auto const& opt_str : VOpt)
 	{
 		if(opt_str == "notnull") _opt.push_back(fopt::notnull);
-		else if(opt_str == "primary_key") _opt.push_back(fopt::primary_key);
-		else if(opt_str == "foreign_key") _opt.push_back(fopt::foreign_key);
+	//	else if(opt_str == "primary_key") _opt.push_back(fopt::primary_key);
+	//	else if(opt_str == "foreign_key") _opt.push_back(fopt::foreign_key);
 		else if(opt_str == "trim") _opt.push_back(fopt::trim);
 		else if(opt_str == "rtrim") _opt.push_back(fopt::rtrim);
 		else if(opt_str == "ltrim") _opt.push_back(fopt::ltrim);
@@ -172,6 +172,33 @@ d::field::check_read()
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
+void
+d::field::print_opt() const
+{ try {
+	/*for(const auto& op : _opt)
+	{	switch(op)
+		{
+			case fopt::notnull: check_notnull(); break;
+			case fopt::null0: check_null0(); break;
+			default: break;
+		}
+	}*/
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+void
+d::field::print_name() const
+{ try {
+	/*for(const auto& op : _opt)
+	{	switch(op)
+		{
+			case fopt::notnull: check_notnull(); break;
+			case fopt::null0: check_null0(); break;
+			default: break;
+		}
+	}*/
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
 ////////////////////////////////////////////////////////////////////////////////
 // public functions - checks functions
 ////////////////////////////////////////////////////////////////////////////////

@@ -11,7 +11,10 @@ DLIB_NAME       = -lutilpp -ldatabasepp #-lerror -lfileUtil -lmemoryManager -lst
 ################################################
 #CFLAGS          = -Wall -g -O3 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # Werror transforms warning in error
 #CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # change O3 to Ofast -> Specify -ofast to perform O3 optimizations plus disregard strict standards compliance.
-CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant
+### USE THIS FLAG FOR PRODUCTION -Ofast
+#CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant 
+### USE  THIS FLAG FOR TEST -Og -> debugging -O0 normal
+CFLAGS          = -Wall -g -O0 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # TEST -Og
 DLIB_STD        = -lm -lpthread -lpqxx -lpq #-lfcgi -lgc 
 DLIB            = $(DLIB_STD) $(DLIB_NAME)
 COMPILER_FLAGS  = $(CFLAGS) #$(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) # use $(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) when library is not in global environment
