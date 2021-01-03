@@ -29,6 +29,8 @@
 #include <vector>
 #include <string>
 #include <variant>
+#include <unordered_set>
+#include <unordered_map>
 
 #include <pqxx/pqxx>
 
@@ -83,7 +85,29 @@ namespace d
 	////////////////////////////////////////////////////////////////////////////////
 	// general class/interface to abtract the database
 	////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * Necessário para utilizar a função quote() do postgres.
+	 * Somente se consegue acessar ela por meio de uma instância já criada.
+	 * para não quebrar a modularidade, nem inserir demasiados parâmetros, foi
+	 * criado as funções.
+	 * Utilizar essas funções para garantir que o código não quebre ou ocorra
+	 *  algum problema.
+	 * Ela só funciona no postgres (libpqxx) e também.
+	 */
+	////////////////////////////////////////////////////////////////////////////////
+	//  auxiliar classes - quote
+	////////////////////////////////////////////////////////////////////////////////
+	extern pqxx::connection_base* ___CB; // inicialization in "obj.cpp", with value nullptr
 	
+	template<class T>
+	void inline init_quote(T& t) { ___CB = (pqxx::connection_base*)&t; }
+	
+	template<class T>
+	void inline commit(T& t) {
+		try{ t.commit(); ___CB = nullptr; } catch (const std::exception &e) { throw err(e.what()); }}
+	
+	std::string inline quote(const std::string& s) {
+		try{ return ___CB->quote(s); } catch (const std::exception &e) { throw err(e.what()); }}
 	
 	////////////////////////////////////////////////////////////////////////////////
 	// general class to bind a row of a line in a object
@@ -100,7 +124,14 @@ namespace d
 	};
 	
 	/**
-	 * by default quote is always executed in check_write(), for not executed quote use: no_quote
+	 * muitos ainda não foram implementados - verificar
+	 * @import: quote: by default is always executed in check_write(), for not executed quote use: no_quote
+	 * se o tipo não for string, no momento da executação do quote, a função check_write() levanta uma exceção.
+	 * a função check_write() - sempre executa o quote como última opção de todas as opções escolhidas.
+	 * a função check_read() - por default não executa o quote.
+	 * o quote é executado pela função d::quote() - acima codificada.
+	 * @implemented check_write: quote notnull
+	 * @implemented check_read: null0 notnull
 	 */
 	enum class fopt { // options to field
 		notnull, primary_key, foreign_key, // column options
@@ -113,12 +144,33 @@ namespace d
 	class field {
 	 protected:
 		std::variant<D_FIELD_TYPES> val = "";
-		std::map<std::string, std::string> _name = {}; // column name of field
-	 	std::vector<fopt> opt = {}; // options of field
-	 	
+		std::unordered_set<std::string> _name = {}; //column name of field or others alias to identify this field in sql statement
+	 	std::vector<fopt> _opt = {}; // options of field
 	 public:
-	 
-	 	inline std::map<std::string, std::string>& name() { return _name; }
+	 	////////////////////////////////////////////////////////////////////////////////
+		// public functions - constructor
+		////////////////////////////////////////////////////////////////////////////////
+		field() {}
+	 	/**
+	 	 * somente a parte do const std::unordered_set<std::string>& name = {} está implementada
+	 	 * falta implementar transformar as strings de opt em opt.
+	 	 */
+	 	field(const std::vector<std::string>& opt, const std::unordered_set<std::string>& name = {});
+	 	
+	 	//field(const std::vector<fopt>& opt, const std::unordered_set<std::string>& name);
+	 	
+	 	////////////////////////////////////////////////////////////////////////////////
+		// public functions
+		////////////////////////////////////////////////////////////////////////////////
+		/**
+		 * Inicializa o vetor _opt com as opções existentes no vector.
+		 * Caso _opt tenha alguma opção que não esteja em VOpt, esta opção será apagada.
+		 */
+		void init_opt(const std::vector<std::string>& VOpt);
+		
+	 	// return the conteiner that get the names of this field
+	 	inline std::unordered_set<std::string>& name() { return _name; }
+	 	
 	 	/**
 	 	 * return a string that represents the index.
 	 	 * ex: index = 1 -> returned: "string"
@@ -136,11 +188,7 @@ namespace d
 		 */
 		inline int index() const { return val.index(); }
 
-		/**
-		 * returned the key in string format.
-		 */
-		std::string key_str() const;
-		
+
 		/**
 		 * Check and trata the values to write in database.
 		 * Check and trata the values to read from database.
@@ -148,6 +196,22 @@ namespace d
 		void check_write();
 		void check_read();
 		
+		////////////////////////////////////////////////////////////////////////////////
+		// check functions
+		////////////////////////////////////////////////////////////////////////////////
+		void inline check_notnull() { 
+			try { if( str().empty() )
+					throw err("Value of field is null or empty string. "
+						"Forbidden by \"notnull\" field option."); }
+			catch (const std::exception &e) { throw err(e.what()); } }
+		
+		void inline check_null0() { try { if( str().empty() ) set() = "0"; }
+			catch (const std::exception &e) { throw err(e.what()); } }
+		
+		
+		////////////////////////////////////////////////////////////////////////////////
+		// check functions END
+		////////////////////////////////////////////////////////////////////////////////
 		/**
 		 * cast the string type to another type.
 		 * example: the value of field is a string "3"
@@ -238,24 +302,29 @@ namespace d
 	 	 * com combinado com as chaves do objeto que sofrerão a substituição.
 	 	 * a ideia deste tipo de concat é inspirada no cout << do c++.
 	 	 * A primeira string do vetor statement, sempre é um sql puro (pedaço dele),
-	 	 * e a outra, sempre é uma string que representa uma chave do field,
+	 	 * e a outra, sempre é uma string que representa uma chave do field ou um valor contido na estrutura field.name(),
 	 	 * a próxima sempre é um outro pedaço do sql puro, e assim sucessivamente.
 	 	 * As possições pares do vetor, sempre serão ocupadas por sql puro
-	 	 * e as posições ímpares sempre por uma string que representa uma chave de um campos do objeto.
+	 	 * e as posições ímpares sempre por uma string que representa uma chave de um campo do objeto.
+	 	 * @obs: a função verifica todas as chaves dos fields, e somente caso não encontrado, é que ela começa a verficiar
+	 	 * pelos valores em field.name(). Caso uma chave de um field e um dos valores de field.name(), que pode conter vários,
+	 	 * forem iguais, sempre será substituído pela chave do map (chave do map que aponta para o field), pois é buscado
+	 	 * nele primeiro.
 	 	 * @obs: ao final, automaticamente se coloca o caracter ';', para demarcar o fim.
 	 	 * @obs: são aceitos posições com strings vazias, porém, se for um field_key, ele
 	 	 * ainda assim, será testado.
 	 	 * @exemplo: o std::vector<std::string>& statement = { "SELECT * from COMPANY" }
 	 	 * será transformado em: "SELECT * from COMPANY;"
 	 	 * @exemplo: o statement = { "SELECT * from ", "table" }
-	 	 * e no std::map<std::string, field>& M, contenha um tupla: ["table"] = "COMPANY"
+	 	 * e no std::unordered_map<std::string, field>& M, contenha um tupla: ["table"] = "COMPANY" ou ["table"].name() = { "COMPANY" }
 	 	 * será transformado em: "SELECT * from COMPANY;"
 	 	 * @obs: sempre antes de escrever no sql final, cada valor de chave, antes é chamado
 	 	 * a função: check_write() de field.
 	 	 * sempre depois de colocar os valores no campo de field, sempre é executado
 	 	 * imediatamente após a função: check_read() de field.
 	 	 * @obs: a própria função, já transforma para string as chaves que não são string (int, float, etc..)
-	 	 * por meio da função: str() da classe field.
+	 	 * por meio da função: str() da classe field antes da escrita.
+	 	 * @obs: as funções são sempre escritas em field.set(), como string: F.set() = R.is_null() ? "" : R.as<std::string>();
 	 	 */
 		sql(const kind& _kind, const std::vector<std::string>& statement);
 		
@@ -269,10 +338,16 @@ namespace d
 	 	 * necessary to execute exec0 and exec1
 	 	 */
 	 	template<class T>
-	 	void run0(const std::map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec0
+	 	void run0(const std::unordered_map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec0
+	 	
+	 	template<class T>
+		void run0(const std::vector<std::unordered_map<std::string, field>>& V, T& W);
 		
 		template<class T>
-	 	void run1(std::map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec1
+	 	void run1(std::unordered_map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec1
+	 	
+	 	template<class T>
+		void run1(std::vector<std::unordered_map<std::string, field>>& V, T& W);
 	 	
 	 	/**
 	 	 * exibe informações da query:
@@ -280,15 +355,35 @@ namespace d
 	 	 * imprime o vetor statement, com divisão, entre o que é chave e o que é sql puro.
 	 	 */
 	 	void print();
-
+	 	
+	 	/**
+	 	 * imprime todas as chaves do map e todos os nomes de cada field - map<std::string e field.name()
+	 	 * realiza o procedimento acima para todos os elementos do vetor.
+	 	 * dado uma entrada, esta função imprime o que o sql entende que são as possíveis chaves para o statement
+	 	 */
+	 	void print_key(const std::vector<std::unordered_map<std::string, field>>& V);
+	 	
+	 	/**
+	 	 * Retorna a query já pronta do sql para ser executada.
+	 	 * Pega a variável statement (array de strings que são textos puros de sql + field_key (or field.name())
+	 	 * e transforma este vetor em uma query.
+	 	 * substitui os valores de field_key (or field.name()) pelos correspondentes existente no vetor V passado.
+	 	 * @return: a string de retorno pode já ser executada: ex: W.exec(sql.make_query(V));
+	 	 */
+	 	std::string make_query(const std::vector<std::unordered_map<std::string, field>>& V);
 	 private:
 		////////////////////////////////////////////////////////////////////////////////
 	 	// auxiliar functions
 	 	////////////////////////////////////////////////////////////////////////////////
-	 	std::string make_query(const std::map<std::string, field>& M);
-		void copy_result(const pqxx::row& Row, std::map<std::string, field>& M);
-		std::string make_query_concat(const std::map<std::string, field>& M);
-		std::string make_query_format(const std::map<std::string, field>& M);
+		void copy_result(const pqxx::row& Row, std::vector<std::unordered_map<std::string, field>>& V);
+		
+		field& get_field(const std::string& key, 
+			const std::vector<std::unordered_map<std::string, field>>& V, const int idx = 0);
+		field& get_field_by_name(const std::string& key,
+			const std::vector<std::unordered_map<std::string, field>>& V, const int idx = 0);
+		
+		std::string make_query_concat(const std::vector<std::unordered_map<std::string, field>>& V);
+		std::string make_query_format(const std::vector<std::unordered_map<std::string, field>>& V);
 	};
 	
 	/**
@@ -305,8 +400,9 @@ namespace d
 	 */
 	class obj {
 	 protected:
-		std::map<std::string, field> _field = {}; // col = column -> [column_name] = column_value
-		std::map<std::string, sql> _sql_real = {};
+		std::unordered_map<std::string, field> _field = {}; // col = column -> [column_name] = column_value
+		std::vector<std::string> _primary_key = {};
+		std::unordered_map<std::string, sql> _sql_real = {};
 		/**
 		 * Conjunto de sqls fakes ou reais.
 		 * cada sql fake, executa na verdade, os sqls cujos estão ele tem guardado no seu vetor.
@@ -315,15 +411,19 @@ namespace d
 		 * quando um sql fake é chamado, o commit é executado somente após o último sql.
 		 * ideal para realizar roolbacks de vários sqls.
 		 */
-		std::map<std::string, std::vector<std::string>> _sql_fake = {};
+		std::unordered_map<std::string, std::vector<std::string>> _sql_fake = {};
 		
 	  public:
 	  	////////////////////////////////////////////////////////////////////////////////
 		// constructors
 		////////////////////////////////////////////////////////////////////////////////
 	  	obj(const std::vector<std::string>& field_key = {},
-	  		const std::map<std::string, sql>& sql_real = {},
-	  		const std::map<std::string, std::vector<std::string>>& sql_fake = {});
+	  		const std::unordered_map<std::string, sql>& sql_real = {},
+	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
+	  	
+	  	obj(const std::unordered_map<std::string, field>& _field,
+	  		const std::unordered_map<std::string, sql>& sql_real = {},
+	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
 	
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - auxiliar functions
@@ -331,7 +431,7 @@ namespace d
 		/**
 		 * print all values of the class - use printf
 		 * - table
-		 * - [column_name] = "column_value" - std::map<std::string, std::string> col;
+		 * - [column_name] = "column_value" - std::unordered_map<std::string, std::string> col;
 		 */
 	  	void print();
 	  	
@@ -356,7 +456,7 @@ namespace d
 	  	 * TODAS as chaves in row devem existir em this->col -> throw an exception u::error
 	  	 * obs: row pode ser apenas um subconjunto de this->col, não precisa conter todas as chaves de this->col.
 	  	 */
-	  	void set(const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_);
+	  	void set(const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_);
 	  	
 	  	////////////////////////////////////////////////////////////////////////////////
 		// public functions - sql functions
@@ -369,13 +469,13 @@ namespace d
 		 * Caso a resposta não seja do tamanho esperado, levanta uma exceção.
 		 */
 	  	void run0(const std::vector<std::string>& sql_key,
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
 		void run1(const std::vector<std::string>& sql_key,
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
 	  	void nrun0(const std::vector<std::string>& sql_key,
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
 	  	void nrun1(const std::vector<std::string>& sql_key,
-	  		const std::map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
+	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
 	  	////////////////////////////////////////////////////////////////////////////////
 		// private functions
 		////////////////////////////////////////////////////////////////////////////////
@@ -394,16 +494,27 @@ namespace d
 	 * Agrupa um conjunto de objetos.
 	 * Para ser utilizado quando um sql retornar mais de uma resultado.
 	 */
-	class set {
-	 protected:
-	 	obj _root;
-	 	std::vector<obj> _obj;
-		std::map<std::string, std::sql> _sql_real;
-		std::map<std::string, std::sql> _sql_fake;
+	 class table {
+	  protected:
+	  	std::vector<obj> _obj = {};
+	  	//std::unordered_map<std::string, std::unordered_multimap<std::string, int i>> _primary_key;
+		std::unordered_map<std::string, sql> _sql_real = {};
+		std::unordered_map<std::string, std::vector<std::string>> _sql_fake = {};
+		
+	  public:
+	  	////////////////////////////////////////////////////////////////////////////////
+		// constructors
+		////////////////////////////////////////////////////////////////////////////////
+	  	table(const std::vector<std::string>& field_key = {},
+	  		const std::unordered_map<std::string, sql>& sql_real = {},
+	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
 	
-	 public:
-	 	
-	};
+		////////////////////////////////////////////////////////////////////////////////
+		// public functions - auxiliar functions
+		////////////////////////////////////////////////////////////////////////////////  	
+		inline size_t size()  const {
+			try{ return _obj.size(); } catch (const std::exception &e) { throw err(e.what()); }}
+	 };
 	
 	////////////////////////////////////////////////////////////////////////////////
 	//  error classes
@@ -415,9 +526,9 @@ namespace d
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
-	//  end namespace cweb
+	//  end namespace database d::
 	////////////////////////////////////////////////////////////////////////////////
-} // end namespace cweb
+} // end namespace database d::
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -427,22 +538,40 @@ namespace d
 // class sql
 ////////////////////////////////////////////////////////////////////////////////
 template<class T>
-void d::sql::run0(const std::map<std::string, field>& M, T& W)
+void d::sql::run0(const std::unordered_map<std::string, field>& M, T& W)
 { try {
-    W.exec0( make_query(M) );
+    W.exec0( make_query( { M } ) );
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 template<class T>
-void d::sql::run1(std::map<std::string, field>& M, T& W)
+void d::sql::run0(const std::vector<std::unordered_map<std::string, field>>& V, T& W)
 { try {
-    pqxx::row R{ W.exec1( make_query(M) ) };
-    copy_result(R, M);
+    W.exec0( make_query(V) );
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<class T>
+void d::sql::run1(std::unordered_map<std::string, field>& M, T& W)
+{ try {
+    pqxx::row R{ W.exec1( make_query( { M } ) ) };
+    std::vector<std::unordered_map<std::string, field>> V = {};
+    V.push_back(std::move(M));
+    copy_result(R, V);
+    M = std::move(V[0]);
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<class T>
+void d::sql::run1(std::vector<std::unordered_map<std::string, field>>& V, T& W)
+{ try {
+    pqxx::row R{ W.exec1( make_query(V) ) };
+    copy_result(R, V);
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// class sql
+// class obj
 ////////////////////////////////////////////////////////////////////////////////
 template<class T>
 void d::obj::xrunX(const std::vector<std::string>& sql_key, const erun Type, T& W)

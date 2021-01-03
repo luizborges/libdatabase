@@ -3,6 +3,46 @@
 ////////////////////////////////////////////////////////////////////////////////
 // public functions - constructor
 ////////////////////////////////////////////////////////////////////////////////
+d::field::field(
+	const std::vector<std::string>& opt, const std::unordered_set<std::string>& name)
+{ try {
+	this->init_opt(opt);
+	this->_name = name;
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+/*
+d::field::field(const std::vector<fopt>& opt, const std::unordered_set<std::string>& name)
+{ try {
+	this->_opt = opt;
+	this->_name = name;
+ } catch (const std::exception &e) { throw err(e.what()); }
+} */
+////////////////////////////////////////////////////////////////////////////////
+// public functions
+////////////////////////////////////////////////////////////////////////////////
+void
+d::field::init_opt(const std::vector<std::string>& VOpt)
+{ try {
+	for(auto const& opt_str : VOpt)
+	{
+		if(opt_str == "notnull") _opt.push_back(fopt::notnull);
+		else if(opt_str == "primary_key") _opt.push_back(fopt::primary_key);
+		else if(opt_str == "foreign_key") _opt.push_back(fopt::foreign_key);
+		else if(opt_str == "trim") _opt.push_back(fopt::trim);
+		else if(opt_str == "rtrim") _opt.push_back(fopt::rtrim);
+		else if(opt_str == "ltrim") _opt.push_back(fopt::ltrim);
+		else if(opt_str == "upper") _opt.push_back(fopt::upper);
+		else if(opt_str == "lower") _opt.push_back(fopt::lower);
+		else if(opt_str == "null0") _opt.push_back(fopt::null0);
+		else if(opt_str == "in") _opt.push_back(fopt::in);
+		else if(opt_str == "not_in") _opt.push_back(fopt::not_in);
+		else if(opt_str == "quote") _opt.push_back(fopt::quote);
+		else if(opt_str == "no_quote") _opt.push_back(fopt::no_quote);
+		else throw err("no field_option found.: \"%s\"", opt_str.c_str());
+	}
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
 std::string
 d::field::type() const
 { try {
@@ -100,24 +140,57 @@ d::field::str_to(const std::string& type)
 void
 d::field::check_write()
 { try {
-	// TODO -
+	bool exec_quote = true;
+	for(const auto& op : _opt)
+	{	switch(op)
+		{
+			case fopt::notnull: check_notnull(); break;
+			case fopt::no_quote: exec_quote = false; break;
+			default: break;
+		}
+	}
+	if(exec_quote)
+	{
+		if(etype() != field_type::STR) {
+			throw err("Trying to quote a value that is not a string. field_type: %s", type().c_str());}
+		set() = quote(get());
+	}
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 void
 d::field::check_read()
 { try {
-	// TODO - 
+	for(const auto& op : _opt)
+	{	switch(op)
+		{
+			case fopt::notnull: check_notnull(); break;
+			case fopt::null0: check_null0(); break;
+			default: break;
+		}
+	}
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// public functions - checks functions
+////////////////////////////////////////////////////////////////////////////////
+/*void d::field::check_notnull()
+{ try {
+	if(str().empty())
+		throw err("Value of field is null or empty string. Forbidden by \"notnull\" field option.");
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+void d::field::check_null0()
+{ try {
+	if(str().empty()) set() = "0";
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+*/
+////////////////////////////////////////////////////////////////////////////////
 // private functions - auxiliar
 ////////////////////////////////////////////////////////////////////////////////
-
-
-
-
 
 
 

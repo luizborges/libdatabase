@@ -37,7 +37,7 @@ BIND_BD_OBJ = bind_db_obj.cpp
 
 C_SRC_LIB       = 
 C_SRC_MAIN      = 
-C_SRC           = field.cpp obj.cpp sql.cpp #$(BIND_BD_OBJ) bind_db_obj.cpp #$(POSTGRESQL)
+C_SRC           = field.cpp obj.cpp sql.cpp table.cpp #$(BIND_BD_OBJ) bind_db_obj.cpp #$(POSTGRESQL)
 C_OBJ_ORI       = $(C_SRC:.cpp=.o)
 C_SRC_NAME_ONLY = $(notdir $(C_SRC))
 C_OBJ_NAME_ONLY = $(C_SRC_NAME_ONLY:.cpp=.o)
@@ -146,6 +146,7 @@ clean_lib: clean
 	sudo rm -rf $(LIB) $(DLIB_DIR)/$(LIB) $(DLIB_DIR_H)/headers/$(C_LIB_H)
 
 clean_glib: clean
+	$(info clean shared library library and headers)
 	sudo rm -rf $(LIB)
 	sudo rm -rf $(DLIB_DIR_GLOBAL)/$(LIB)
 	sudo rm -rf $(DLIB_DIR_H_GLOBAL)/$(C_LIB_H)

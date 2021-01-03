@@ -9,7 +9,8 @@ using namespace std;
   SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '123')))/60;
  */
  
-void* CB;
+//void* CB;
+pqxx::connection_base* CB;
 
 int main() {
  try {
@@ -21,19 +22,38 @@ int main() {
     	std::cout << "Can't open database" << std::endl; return 1;
     } 
     pqxx::nontransaction N(C);
-    CB = &N;
+    CB = (pqxx::connection_base*)&N;
     string s1 = "SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '"; //'1')))/60 as time";
-	d::obj sh {{"id", "time"}, 
+	d::obj sh {{ {"id", { {}, {}} }, {"time", {{}, {" ", "ate", "date"}} }}, 
 		//{{"init", { d::kind::CONCAT, {"select id, date as time from head where id = '", "id", "'"}}}}};
+		{{"init", { d::kind::CONCAT, {"select id, date from head where id = ", "id", ""}}}}};
 		//{{"init", { d::kind::CONCAT, {"select * from head where id = '", "id", "'"}}}}};
-		{{"init", { {s1, "id", "')))/60 as time"}}}}};
+		//{{"init", { {s1, "id", "')))/60 as time"}}}}};
 		//SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '1')))/60 as time;
-	sh.run1({"init"}, {{"id", "123"}});
 	
+	
+	printf("[%s]: \"%s\"\n", "time", sh["time"].get().c_str());
+	sh.run1({"init"}, {{"id", "123"}});
 	printf("[%s]: \"%s\"\n", "id", sh["id"].get().c_str());
 	printf("[%s]: \"%s\"\n", "time", sh["time"].get().c_str());
 	
-	string str = ((pqxx::connection_base*)CB)->quote("xupeta");
+	sh.print();
+	
+	d::obj xp = {};
+	
+	xp = sh;
+	printf("xp\n");
+	xp.print();
+	printf("sh\n");
+	sh.print();
+	printf("\n===change===\n");
+	sh["id"].set() = "ok";
+	printf("xp\n");
+	xp.print();
+	printf("sh\n");
+	sh.print();
+	//string str = ((pqxx::connection_base*)CB)->quote("xupeta");
+	string str = CB->quote("xus");
 	printf("%s\n", str.c_str());
 	
 	/*
