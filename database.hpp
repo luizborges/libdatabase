@@ -100,7 +100,7 @@ namespace d
 	extern pqxx::connection_base* ___CB; // inicialization in "obj.cpp", with value nullptr
 	
 	template<class T>
-	void inline init_quote(T& t) { ___CB = (pqxx::connection_base*)&t; }
+	void inline init_quote(const T& t) { ___CB = (pqxx::connection_base*)&t; }
 	
 	template<class T>
 	void inline commit(T& t) {
@@ -144,6 +144,7 @@ namespace d
 	class field {
 	 protected:
 		std::variant<D_FIELD_TYPES> val = "";
+		field_type def = field_type::STR; // tipo de construção | usado para escolher qual será o padrão de conversão no select do sql, para automatizar e também deixar mais legível qual é o tipo deste campo
 		std::unordered_set<std::string> _name = {}; //column name of field or others alias to identify this field in sql statement
 	 	std::vector<fopt> _opt = {}; // options of field
 	 public:
@@ -299,6 +300,8 @@ namespace d
 		FORMAT, CONCAT
 	};
 	
+	class obj; // fowarding definition
+	
 	class sql {
 	 protected:
 		kind _kind;
@@ -351,16 +354,16 @@ namespace d
 	 	 * necessary to execute exec0 and exec1
 	 	 */
 	 	template<class T>
-	 	void run0(const std::unordered_map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec0
+	 	void run0(const obj& O, T& W); // roda a query por meio da função pqxx::exec0
 	 	
 	 	template<class T>
-		void run0(const std::vector<std::unordered_map<std::string, field>>& V, T& W);
+		void run0(const std::vector<obj>& V, T& W);
 		
 		template<class T>
-	 	void run1(std::unordered_map<std::string, field>& M, T& W); // roda a query por meio da função pqxx::exec1
+	 	void run1(obj& O, T& W); // roda a query por meio da função pqxx::exec1
 	 	
 	 	template<class T>
-		void run1(std::vector<std::unordered_map<std::string, field>>& V, T& W);
+		void run1(std::vector<obj>& V, T& W);
 	 	
 	 	/**
 	 	 * exibe informações da query:
@@ -374,7 +377,7 @@ namespace d
 	 	 * realiza o procedimento acima para todos os elementos do vetor.
 	 	 * dado uma entrada, esta função imprime o que o sql entende que são as possíveis chaves para o statement
 	 	 */
-	 	void print_key(const std::vector<std::unordered_map<std::string, field>>& V);
+	 	void print_key(const std::vector<obj>& V);
 	 	
 	 	/**
 	 	 * Retorna a query já pronta do sql para ser executada.
@@ -383,20 +386,21 @@ namespace d
 	 	 * substitui os valores de field_key (or field.name()) pelos correspondentes existente no vetor V passado.
 	 	 * @return: a string de retorno pode já ser executada: ex: W.exec(sql.make_query(V));
 	 	 */
-	 	std::string make_query(const std::vector<std::unordered_map<std::string, field>>& V);
+	 	std::string make_query(const std::vector<obj>& V);
+	 	
+	 	void copy_result(const pqxx::row& Row, std::vector<obj>& V);
+
 	 private:
 		////////////////////////////////////////////////////////////////////////////////
 	 	// auxiliar functions
 	 	////////////////////////////////////////////////////////////////////////////////
-		void copy_result(const pqxx::row& Row, std::vector<std::unordered_map<std::string, field>>& V);
-		
 		field& get_field(const std::string& key, 
-			const std::vector<std::unordered_map<std::string, field>>& V, const int idx = 0);
+			const std::vector<obj>& V, const size_t idx = 0);
 		field& get_field_by_name(const std::string& key,
-			const std::vector<std::unordered_map<std::string, field>>& V, const int idx = 0);
+			const std::vector<obj>& V, const size_t idx = 0);
 		
-		std::string make_query_concat(const std::vector<std::unordered_map<std::string, field>>& V);
-		std::string make_query_format(const std::vector<std::unordered_map<std::string, field>>& V);
+		std::string make_query_concat(const std::vector<obj>& V);
+		std::string make_query_format(const std::vector<obj>& V);
 	};
 	
 	/**
@@ -433,12 +437,12 @@ namespace d
 		obj() {}
 		
 	  	obj(const std::vector<std::string>& field_key,
-		  	const std::unordered_set<std::string> primary_key = {},
+		  	const std::unordered_set<std::string>& primary_key = {},
 	  		const std::unordered_map<std::string, sql>& sql_real = {},
 	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
 	  	
 	  	obj(const std::unordered_map<std::string, field>& _field,
-	  		const std::unordered_set<std::string> primary_key = {},
+	  		const std::unordered_set<std::string>& primary_key = {},
 	  		const std::unordered_map<std::string, sql>& sql_real = {},
 	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
 	
@@ -448,11 +452,18 @@ namespace d
 		inline std::unordered_set<std::string>& primary_key() { return _primary_key; };
 		
 		/**
-		 * print all values of the class - use printf
-		 * - table
-		 * - [column_name] = "column_value" - std::unordered_map<std::string, std::string> col;
+		 * print all information about the field in the class.
+		 * print all values of all fields in class (key, value, type, options, names)
 		 */
 	  	void print() const;
+	  	
+	  	/**
+	  	 * print values
+	  	 * print only the values of field in class.
+	  	 * this functions is for print the values of table
+	  	 * @arg: msg_init -> string que aparecerá no começo da linha em que se imprimirão os valores
+	  	 */
+	  	void printv(const std::string msg_init) const;
 	  	
 	  	/**
 	  	 * overloading para fazer um sintaxe suggar no código.
@@ -469,6 +480,12 @@ namespace d
 	  	field& operator [] (const std::string& column_name);   // write mode
 	  	const field& operator[](const std::string& key) const; // read mode
 	  	
+	  	inline const bool empty() const { return _field.empty(); }
+	  	
+	  inline virtual const size_t size()  const {
+			try{ return _field.size(); } catch (const std::exception &e) { throw err(e.what()); }}
+		//try{ throw err("me*********"); } catch (const std::exception &e) { throw err(e.what()); }}
+	  	
 	  	/**
 	  	 * Updating the values of map this->col.
 	  	 * If exists a key in row that not exists in "this->col" -> throw an exception u::error
@@ -477,6 +494,18 @@ namespace d
 	  	 */
 	  	void set(const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_);
 	  	
+	  	/**
+	  	 * Recuperar um elemento da estrutura _field, sem a necessidade de visualizar a estrutura armazenada
+	  	 * Para maior modularidade, sempre usar: auto X = my_obj.find(field_key);
+	  	 * Deve enviar o interator, para o usuário testar se realmente existe a chave.
+	  	 * Se utilizar o operator[] em caso de falha throw error(), neste caso deve-se fazer um try-catch
+	  	 * O interator já é padrão do c++, então facilita a leitura e entendimento do código
+	  	 */
+	  	inline  std::unordered_map<std::string, field>::iterator find(const std::string& field_key) {
+	  		try { return _field.find(field_key); } catch (const std::exception &e) { throw err(e.what()); }}
+	  	
+	  	inline  std::unordered_map<std::string, field>::const_iterator find(const std::string& field_key) const {
+	  		try { return _field.find(field_key); } catch (const std::exception &e) { throw err(e.what()); }}
 	  	////////////////////////////////////////////////////////////////////////////////
 		// public functions - for range interators - for work with for range loop
 		////////////////////////////////////////////////////////////////////////////////
@@ -550,6 +579,7 @@ namespace d
 	 */
 	 class table {
 	  protected:
+	  	obj _model = {};
 	  	std::vector<obj> _obj = {};
 	  	/**
 	  	 * Realiza 
@@ -560,30 +590,43 @@ namespace d
 	  	////////////////////////////////////////////////////////////////////////////////
 		// constructors
 		////////////////////////////////////////////////////////////////////////////////
+		table() {}
 	  	table(const obj& Obj);
 	
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - auxiliar functions
 		////////////////////////////////////////////////////////////////////////////////  	
-		inline size_t size()  const {
+		inline virtual const size_t size()  const {
 			try{ return _obj.size(); } catch (const std::exception &e) { throw err(e.what()); }}
 		
-		inline std::vector<obj>& vobj() {
-			try{ return _obj; } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		inline obj& move(const obj& Obj) {
+		inline virtual void clear()  {
+			try{ return _obj.clear(); } catch (const std::exception &e) { throw err(e.what()); }}
+				
+		inline virtual obj& move(const obj& Obj) {
 			try { _obj.push_back(std::move(Obj)); return _obj.back(); } catch(const std::exception &e) { throw err(e.what()); }}
 		
-		obj& move(const obj& Obj, const size_t idx);
-
-		void init(const obj& Obj);
-		void refresh();
+		virtual obj& move(const obj& Obj, const size_t idx);
+		
+		// print the table - head (_model object) and the body (values of _obj)
+		virtual void print() const;
+		
+		////////////////////////////////////////////////////////////////////////////////
+		// public functions - sql / run functions
+		////////////////////////////////////////////////////////////////////////////////
+		/**
+		 * 
+		 */
+		template<class T>
+		void refresh(T& Transaction, const sql& Query, 
+					 const std::vector<obj>& VArgQuery, const obj& Model = {});
 		//void update();
 		//void upgrade();
+		
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - overloading operators
 		////////////////////////////////////////////////////////////////////////////////
-		obj& operator[] (const size_t idx);
+		virtual obj& operator[] (const size_t idx);
+		virtual const obj& operator[] (const size_t idx) const;
 		
 		////////////////////////////////////////////////////////////////////////////////
 		// public functions - for range interators - for work with for range loop
@@ -595,18 +638,25 @@ namespace d
 		 * where it is the one element of vector<obj> _obj
 		 * for(auto const& it : T) = for(auto const& it : T._obj)
 		 */
-		inline std::vector<obj>::iterator begin(){
+		inline virtual std::vector<obj>::iterator begin(){
         	return _obj.begin();
     	}
-	    inline std::vector<obj>::iterator end(){
+	    inline virtual std::vector<obj>::iterator end(){
     		return _obj.end();
     	}
-    	inline std::vector<obj>::const_iterator begin() const {
+    	inline virtual std::vector<obj>::const_iterator begin() const {
     		return _obj.begin();
     	}
-    	inline std::vector<obj>::const_iterator end() const {
+    	inline virtual std::vector<obj>::const_iterator end() const {
     	    return _obj.end();
     	}
+    	
+    	////////////////////////////////////////////////////////////////////////////////
+		// private functions - auxiliar functions
+		////////////////////////////////////////////////////////////////////////////////
+		private:
+    	void check_model(const obj& Model);
+    	void copy_result(const pqxx::result& T, const sql& Query);
 	 };
 	
 	////////////////////////////////////////////////////////////////////////////////
@@ -631,33 +681,33 @@ namespace d
 // class sql
 ////////////////////////////////////////////////////////////////////////////////
 template<class T>
-void d::sql::run0(const std::unordered_map<std::string, field>& M, T& W)
+void d::sql::run0(const obj& O, T& W)
 { try {
-    W.exec0( make_query( { M } ) );
+    W.exec0( make_query( { O } ) );
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 template<class T>
-void d::sql::run0(const std::vector<std::unordered_map<std::string, field>>& V, T& W)
+void d::sql::run0(const std::vector<obj>& V, T& W)
 { try {
     W.exec0( make_query(V) );
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 template<class T>
-void d::sql::run1(std::unordered_map<std::string, field>& M, T& W)
+void d::sql::run1(obj& O, T& W)
 { try {
-    pqxx::row R{ W.exec1( make_query( { M } ) ) };
-    std::vector<std::unordered_map<std::string, field>> V = {};
-    V.push_back(std::move(M));
+    pqxx::row R{ W.exec1( make_query( {O} ) ) };
+    std::vector<obj> V = {};
+    V.push_back(std::move(O));
     copy_result(R, V);
-    M = std::move(V[0]);
+    O = std::move(V[0]);
     //copy_result(R, { std::forward(M) }); // TODO - erro - fazer esse código funcionar
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 template<class T>
-void d::sql::run1(std::vector<std::unordered_map<std::string, field>>& V, T& W)
+void d::sql::run1(std::vector<obj>& V, T& W)
 { try {
     pqxx::row R{ W.exec1( make_query(V) ) };
     copy_result(R, V);
@@ -680,15 +730,29 @@ void d::obj::xrunX(const std::vector<std::string>& sql_key, const erun Type, T& 
     			print(); throw err("no found sql_key in field of object. - sql_key: \"%s\"", key); }
     	
     		switch(Type) {
-	    		case erun::run0: SQL->second.run0(_field, W); break;
-	    		case erun::run1: SQL->second.run1(_field, W); break;
+	    		case erun::run0: SQL->second.run0(*this, W); break;
+	    		case erun::run1: SQL->second.run1(*this, W); break;
 	    		default: throw err("enumeration erun index does not exists: %d", static_cast<int>(Type)); }
     	}
     }
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
+// class table
+////////////////////////////////////////////////////////////////////////////////
+template<class T>
+void d::table::refresh(T& Transaction, const sql& Query, 
+	const std::vector<obj>& VArgQuery, const obj& Model)
+{ try {
+	check_model(Model);
+	init_quote(Transaction);
+	const std::string query = const_cast<sql&>(Query).make_query(VArgQuery);
+	//std::printf("QUERY = \"%s\"\n", query.c_str());
+	pqxx::result R( Transaction.exec( query ));
+	copy_result(R, Query);
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
 #endif // DATABASEPP_H
 
 ////////////////////////////////////////////////////////////////////////////////

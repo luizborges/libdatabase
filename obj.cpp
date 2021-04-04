@@ -9,7 +9,7 @@ pqxx::connection_base* d::___CB = nullptr;
 // public functions - constructor
 ////////////////////////////////////////////////////////////////////////////////
 d::obj::obj(const std::vector<std::string>& field_key,
-		  	const std::unordered_set<std::string> primary_key,
+		  	const std::unordered_set<std::string>& primary_key,
 	  		const std::unordered_map<std::string, sql>& sql_real,
 	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake)
 { try {
@@ -25,7 +25,7 @@ d::obj::obj(const std::vector<std::string>& field_key,
 }
 
 d::obj::obj(const std::unordered_map<std::string, field>& _field,
-	  		const std::unordered_set<std::string> primary_key,
+	  		const std::unordered_set<std::string>& primary_key,
 	  		const std::unordered_map<std::string, sql>& sql_real,
 	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake)
 { try {
@@ -56,15 +56,33 @@ d::obj::print() const // utilizando o err para mandar a saída não somente no s
 		
 		for(auto const& i : const_cast<field&>(a.second).opt()) msg += u::format("%d, ", static_cast<int>(i));
 		
-		msg += u::format(") | Name(");
+		if(const_cast<field&>(a.second).opt().empty() == false) { msg.pop_back(); msg.pop_back(); }
+		msg += u::format(") | Name(  ");
 		
 		for(auto const&i : const_cast<field&>(a.second).name()) msg += u::format("\"%s\", ", i.c_str());
 		
+		if(const_cast<field&>(a.second).name().empty() == false) { 
+			msg.pop_back(); msg.pop_back(); }
+		
 		msg += u::format(")\n");
 	}
+	msg.pop_back(); // get rip the last chaaracter
 	u::error::set_header(false); err(msg.c_str()); u::error::set_header(true);
  } catch (const std::exception &e) { throw err(e.what()); }
 }
+
+void
+d::obj::printv(const std::string msg_init) const
+{ try {
+	std::string msg = msg_init;
+	
+	for(auto const& a: _field) msg += u::format("\"%s\" ,", a.second.str().c_str());
+	
+	if(_field.empty() == false) { msg.pop_back(); msg.pop_back(); } // get rid the last 2 characters of string
+	u::error::set_header(false); err(msg.c_str()); u::error::set_header(true);
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
 
 d::field& // write mode
 d::obj::operator[](const std::string& column_name)
@@ -102,6 +120,7 @@ d::obj::set(const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& 
 		}
  } catch (const std::exception &e) { throw err(e.what()); }
 }
+
 ////////////////////////////////////////////////////////////////////////////////
 // public functions - run functions
 ////////////////////////////////////////////////////////////////////////////////

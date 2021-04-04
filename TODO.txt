@@ -1,4 +1,11 @@
 
+>> Refatorar a classe sql e passar ela para template, para aumentar o nível de generalidade dela.
+exemplo: a função:
+std::string d::sql::make_query_concat(const std::vector<std::unordered_map<std::string, field>>& V)
+Fazer um template dela, para ela receber, tanto lista, vetor e demais conteiners.
+Fazer um template para ela, mesmo de cima, para ela não receber somente std::unordered_map<...>, mas qualquer outra estrutura
+similar, map<...>, por exemplo.
+
 >> Refatorar na classe obj as seguinte estruturas:
 std::vector<std::string> _primary_key = {};
 std::unordered_map<std::string, sql> _sql_real = {};

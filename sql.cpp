@@ -40,12 +40,12 @@ void d::sql::print()
 }
 
 void
-d::sql::print_key(const std::vector<std::unordered_map<std::string, field>>& V)
+d::sql::print_key(const std::vector<obj>& V)
 { try {
 	// desabilita o cabeçalho - para não exibir que é mensagem de erro.
 	// ideal utilizar esta função pois além de exibir em stderr pode também exibir em outra saída se desejar (tela)
 	std::string msg = "";
-	msg += "Show all keys and names below. [index in vector+1]: {\"key1\" (\"name1\", ..., \"nameN\",), ..., \"keyN\" (...),}\n";
+	msg += "Show all keys and names below. [index in vector+1]: {\"key1\" (\"name1\", ..., \"nameN\"), ..., \"keyN\" (...)}\n";
    	int i = 0;
    	for(auto const& M : V)
    	{
@@ -55,16 +55,19 @@ d::sql::print_key(const std::vector<std::unordered_map<std::string, field>>& V)
    			msg += u::format("\"%s\" (", e.first.c_str()); // imprime a chave do map
    			auto const& Name = const_cast<field&>(e.second).name();
    			for(auto const& n : Name) msg += u::format("\"%s\", ", n.c_str()); // imprime o nome do field
+   			if(Name.empty() == false) { msg.pop_back(); msg.pop_back(); }
    			msg += "), ";
    		}
-   		msg += " }\n";
+   		if(M.empty() == false) { msg.pop_back(); msg.pop_back(); }
+   		msg += "}\n";
    	}
+   	msg.pop_back(); // get rid the last character
    	u::error::set_header(false); err(msg.c_str()); u::error::set_header(true);
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 std::string
-d::sql::make_query(const std::vector<std::unordered_map<std::string, field>>& V)
+d::sql::make_query(const std::vector<obj>& V)
 { try {
 	std::string query = "";
 	switch(_kind)
@@ -77,16 +80,9 @@ d::sql::make_query(const std::vector<std::unordered_map<std::string, field>>& V)
 	return query + ";";
  } catch (const std::exception &e) { throw err(e.what()); }
 }
-///////////////////////////////////////////////////////////////////////////////
-// public functions - run functions
-////////////////////////////////////////////////////////////////////////////////
-// template functions - end of database.hpp
 
-////////////////////////////////////////////////////////////////////////////////
-// private functions - auxiliar functions
-////////////////////////////////////////////////////////////////////////////////
 void
-d::sql::copy_result(const pqxx::row& Row, std::vector<std::unordered_map<std::string, field>>& V)
+d::sql::copy_result(const pqxx::row& Row, std::vector<obj>& V)
 { try {
 	for(const auto& R : Row)
 	{ try {
@@ -100,11 +96,19 @@ d::sql::copy_result(const pqxx::row& Row, std::vector<std::unordered_map<std::st
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// public functions - run functions
+////////////////////////////////////////////////////////////////////////////////
+// template functions - end of database.hpp
+
+////////////////////////////////////////////////////////////////////////////////
+// private functions - auxiliar functions
+////////////////////////////////////////////////////////////////////////////////
 d::field&
 d::sql::get_field(const std::string& key,
-	const std::vector<std::unordered_map<std::string, field>>& V, const int idx)
+	const std::vector<obj>& V, const size_t idx)
 { try {
-    if(static_cast<size_t>(idx) >= V.size()) // a chave não existe no maps como chave 
+    if(idx >= V.size()) // a chave não existe no maps como chave 
     	return get_field_by_name(key, V);
 
     const auto e = V[idx].find(key); // busca a chave no map[idx] - chave do map
@@ -117,9 +121,9 @@ d::sql::get_field(const std::string& key,
 
 d::field&
 d::sql::get_field_by_name(const std::string& key,
-	const std::vector<std::unordered_map<std::string, field>>& V, const int idx)
+	const std::vector<obj>& V, const size_t idx)
 {
-	if(static_cast<size_t>(idx) >= V.size()) // a chave não existe no vetor de maps 
+	if(idx >= V.size()) // a chave não existe no vetor de maps 
     {
     	print_key(V);
     	throw err("ERROR - not found key in vector of maps of fields. key: \"%s\"", key.c_str());
@@ -138,7 +142,7 @@ d::sql::get_field_by_name(const std::string& key,
 // KIND::concat - concatenation - functions
 ////////////////////////////////////////////////////////////////////////////////
 std::string
-d::sql::make_query_concat(const std::vector<std::unordered_map<std::string, field>>& V)
+d::sql::make_query_concat(const std::vector<obj>& V)
 { try {
     std::string query = "";
     bool Field_Key = false;
@@ -165,7 +169,7 @@ d::sql::make_query_concat(const std::vector<std::unordered_map<std::string, fiel
 // KIND::format 
 ////////////////////////////////////////////////////////////////////////////////
 std::string
-d::sql::make_query_format(const std::vector<std::unordered_map<std::string, field>>& V)
+d::sql::make_query_format(const std::vector<obj>& V)
 { try {
     throw err("not implemented yet");
  } catch (const std::exception &e) { throw err(e.what()); }

@@ -14,7 +14,18 @@ pqxx::connection_base* CB;
 
 int main() {
  try {
-    pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
+ 	string ww = "   Mue12	   ";
+ 	printf("\"%s\"\n", ww.c_str());
+ 	u::trim(ww);
+ 	u::tolower(ww = ww + "bizARO");
+ 	printf("\"%s\"\n", ww.c_str());
+ 	u::trim(ww);
+ 	if(u::isalnum(ww)) printf("is alnum() = \"%s\"\n", ww.c_str());
+ 
+ 
+ 
+ 
+   /* pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
     	hostaddr = 127.0.0.1 port = 5432");
     if (C.is_open()) {
     	std::cout << "Opened database successfully: " << C.dbname() << std::endl;
@@ -46,7 +57,7 @@ int main() {
 	xp.print();
 	printf("sh\n");
 	sh.print();
-	printf("\n===change===\n");
+	printf("\n===changeXX===\n");
 	sh["id"].set() = "ok";
 	printf("xp\n");
 	xp.print();
@@ -55,16 +66,27 @@ int main() {
 	//string str = ((pqxx::connection_base*)CB)->quote("xupeta");
 	string str = CB->quote("xus");
 	printf("%s\n", str.c_str());
-	
+	if(sh.empty()) printf("sh is empty\n");
+	else printf("sh is NOT empty\n");
 	d::table table(sh);
-	printf("[%s]: \"%s\"\n", "id", table[0]["id"].get().c_str());
+	table.print();
+	d::sql sql {{"select * from head"}};
+	printf("refresh\n");
+	sh["id"].set() = "123";
+	table.refresh(N, sql, { std::move(sh) });
+	d::commit(N);
+	table.print();
+	sh.print();
+	if(sh.empty()) printf("sh is empty\n");
+	else printf("sh is NOT empty\n");
+	/*printf("[%s]: \"%s\"\n", "id", table[0]["id"].get().c_str());
 	printf("[%s]: \"%s\"\n", "time", table[0]["time"].get().c_str());
 	
 	printf("for range\n");
 	for(auto& o : table) {
 		for(auto& f : o)
 			printf("[%s]: \"%s\"\n", f.first.c_str(), f.second.get().c_str());
-	}
+	}*/
 	
 	/*
 	d::obj ss {"session", {"diff"}};
@@ -75,8 +97,8 @@ int main() {
 	
 	ss.select("SELECT CURRENT_TIMESTAMP;", {{"diff"}});
 	d::obj s2 {"head", {"id", "date"}};
-	s2.insert({{"id", "111"}, {"date", ss["diff"].get()}});*/
-	C.disconnect ();
+	s2.insert({{"id", "111"}, {"date", ss["diff"].get()}});
+	C.disconnect ();*/
  } catch (const std::exception &e) {
 	err(e.what());
 	return 1;
