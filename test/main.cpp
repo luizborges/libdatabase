@@ -3,17 +3,27 @@
 #include <util.hpp>
 #include <database.hpp>
 using namespace std;
+
+#define DATABASE_CONNECTION "dbname=pet user=borges password=JSG3bor_g873sqlptgs78b hostaddr=127.0.0.1 port=5432"
 /**
  selects:
   - to retry time in minutes in session:
   SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '123')))/60;
  */
- 
+
 //void* CB;
 pqxx::connection_base* CB;
 
 int main() {
  try {
+	 d::database_connection = "";
+	 cout << d::quote("pula", DATABASE_CONNECTION) << "\n";
+	 cout << d::quote("pula1") << "\n";
+	 cout << d::quote("pula2") << "\n";
+	 cout << d::quote("pula3") << "\n";
+	 cout << d::quote("pula4") << "\n";
+	 
+	 /*
  	string ww = "   Mue12	   ";
  	printf("\"%s\"\n", ww.c_str());
  	u::trim(ww);
@@ -21,7 +31,7 @@ int main() {
  	printf("\"%s\"\n", ww.c_str());
  	u::trim(ww);
  	if(u::isalnum(ww)) printf("is alnum() = \"%s\"\n", ww.c_str());
- 
+ */
  
  
  

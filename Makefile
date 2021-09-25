@@ -14,7 +14,7 @@ DLIB_NAME       = -lutilpp #-lerror -lstackTracer # insert here all dynamics lib
 #CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic # change O3 to Ofast -> Specify -ofast to perform -O3 optimizations plus disregard strict standards compliance.
 #CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant 
 ### USE THIS FLAG FOR PRODUCTION -Ofast
-CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant
+CFLAGS          = -Wall -Wextra -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant
 ### USE  THIS FLAG FOR TEST -Og -> debugging -O0 normal
 #CFLAGS          = -Wall -g -O0 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # TEST -Og
 DLIB_STD        = -lm -lpthread -lpqxx -lpq #-lfcgi -lgc
@@ -41,7 +41,7 @@ BIND_BD_OBJ = bind_db_obj.cpp
 
 C_SRC_LIB       = 
 C_SRC_MAIN      = 
-C_SRC           = field.cpp obj.cpp sql.cpp table.cpp #$(BIND_BD_OBJ) bind_db_obj.cpp #$(POSTGRESQL)
+C_SRC           = general.cpp #field.cpp obj.cpp sql.cpp table.cpp #$(BIND_BD_OBJ) bind_db_obj.cpp #$(POSTGRESQL)
 C_OBJ_ORI       = $(C_SRC:.cpp=.o)
 C_SRC_NAME_ONLY = $(notdir $(C_SRC))
 C_OBJ_NAME_ONLY = $(C_SRC_NAME_ONLY:.cpp=.o)

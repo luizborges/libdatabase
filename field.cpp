@@ -1,5 +1,5 @@
 #include "database.hpp"
-
+/*
 ////////////////////////////////////////////////////////////////////////////////
 // public functions - constructor
 ////////////////////////////////////////////////////////////////////////////////
@@ -9,7 +9,7 @@ d::field::field(
 	this->init_opt(opt);
 	this->_name = name;
  } catch (const std::exception &e) { throw err(e.what()); }
-}
+}*/
 /*
 d::field::field(const std::vector<fopt>& opt, const std::unordered_set<std::string>& name)
 { try {
@@ -20,6 +20,7 @@ d::field::field(const std::vector<fopt>& opt, const std::unordered_set<std::stri
 ////////////////////////////////////////////////////////////////////////////////
 // public functions
 ////////////////////////////////////////////////////////////////////////////////
+/*
 void
 d::field::init_opt(const std::vector<std::string>& VOpt)
 { try {
@@ -174,7 +175,7 @@ d::field::check_read()
 
 void
 d::field::print_opt() const
-{ try {
+{ try {*/
 	/*for(const auto& op : _opt)
 	{	switch(op)
 		{
@@ -182,13 +183,13 @@ d::field::print_opt() const
 			case fopt::null0: check_null0(); break;
 			default: break;
 		}
-	}*/
+	}*//*
  } catch (const std::exception &e) { throw err(e.what()); }
 }
 
 void
 d::field::print_name() const
-{ try {
+{ try {*/
 	/*for(const auto& op : _opt)
 	{	switch(op)
 		{
@@ -196,9 +197,9 @@ d::field::print_name() const
 			case fopt::null0: check_null0(); break;
 			default: break;
 		}
-	}*/
+	}*//*
  } catch (const std::exception &e) { throw err(e.what()); }
-}
+}*/
 ////////////////////////////////////////////////////////////////////////////////
 // public functions - checks functions
 ////////////////////////////////////////////////////////////////////////////////

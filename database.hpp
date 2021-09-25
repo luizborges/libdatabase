@@ -2,6 +2,7 @@
  *
  * @descripion: funciona como um header que contém todas as bibliotecas, é necessário apenas adicionar
  * essa biblioteca para ter acesso a todas a biblioteca.
+ * é feita com base no banco de dados postgres - posteriormente fazer ela ficar genérica para qualquer banco de dados.
  */
 #ifndef DATABASEPP_H
 #define DATABASEPP_H
@@ -10,10 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Includes - default libraries - C
 ////////////////////////////////////////////////////////////////////////////////
-#include <math.h>
-#include <ctype.h>
-#include <time.h>
-#include <errno.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -54,705 +51,524 @@
 ////////////////////////////////////////////////////////////////////////////////
 /**#define TRACE_FUNC \
 fprintf(stderr, "\n*****************************************\n");\
-fprintf(stderr, "TRACE FUNC:: \"%s\" (%d, \"%s\")\n",\
+fprintf(stderr, "TRACE FUNC:: \"%s\" (%database, \"%s\")\n",\
 __PRETTY_FUNCTION__, __LINE__, __FILE__);\
 fprintf(stderr, "*****************************************\n");
 */
 
-/**
- * macro utilizada para deixar mais legível o código.
- * ao invés de escrever: std::variant<std::monostate, std::string, bool, char, int, long, long long,
- *	unsigned char, unsigned int, unsigned long, unsigned long long>
- * basta escrever: std::variant<D_FIELD_TYPES>
- */
-#define D_FIELD_TYPES std::monostate, std::string, char, int, long, long long, \
-	unsigned char, unsigned int, unsigned long, unsigned long long, float, double, long double
-//#define D_FIELD_TYPES std::monostate, std::string, double, int, char
-
 ////////////////////////////////////////////////////////////////////////////////
 // namespace
 ////////////////////////////////////////////////////////////////////////////////
-namespace d 
+namespace database 
 {
+	////////////////////////////////////////////////////////////////////////////////
+	//  general variables
+	////////////////////////////////////////////////////////////////////////////////
+    extern std::string database_connection; // init in general.cpp
+    
+	////////////////////////////////////////////////////////////////////////////////
+	//  general functions - file: general.cpp
+	////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////
+	//  auxliar functions
+	////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * Realiza o quote ou escaping of a string.
+	 * @obs: a primeira vez que a função é usada é necessário ou estar definido já a
+	 * variável database::database_connection ou passar uma string para abertura da conexão válida.
+	 * isto é uma exigência da função quote do pqxx.
+	 * Entretanto, apenas na primeira vez isto é feito, nas outras não é necessário.
+	 * A conexão é criada e desconectada em seguida, para nas outras vezes, apenas a função quote ser usada sem
+	 * a necessidade de abrir e fechar uma conexão.
+	 * @arg str: string que será submetida ao quote().
+	 * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+	 * @return: a string passada em @str que foi tratada pela pqxx::connection_base.quote(str)
+	 */
+	std::string quote(const std::string& str, const std::string& database_connection = database::database_connection);
+	
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//  sql functions
+	////////////////////////////////////////////////////////////////////////////////
+	/**
+     * Inserts a obj_map in table name.
+     * execute a command sql insert.
+     * Cria o comando sql insert e executa ele com base nas chaves do obj_map.
+     * @obs: Executa função: exec0() -> se o banco de dados retornar algum resultado dispara uma exceção.
+     * @obs: todas as chaves do obj_map são usadas para a criação do sql que será executado.
+     * @obs: todas os valores, por default, são colocados em quotes pela função quote do PGSQL.
+     * para retirar algum valor do quote(obj_map["KEY"]) inserir a KEY no argumento no_quote.
+     * @obs: é esperado que todos os valores de obj_map["KEY"] sejam std::string
+     * @arg table_name: nome da tabela que será inserido os dados constantes em obj_map.
+     * @arg obj_map: objeto tipo map que contém os dados que serão inseridos na tabela.
+     * O obj_map segue algumas funções básicas do std::map<> e std::unordered_map<>,  etc..
+     * É esperado que o obj_map mapeie strings para strings.
+     * Exemplos de obj_map válidos: std::map<std::string,std::string> e std::unordered_map<std::string,std::string>
+     * O obj_map deve responder as seguintes funções:
+     * for(const auto& elem : obj_map) -> retorna cada elemento do obj_map
+     * elem.first -> retorna a chave do elemento -> elem.first = "KEY"
+     * elem.second -> valor da chave no elemento -> obj_map["KEY"] >> a função obj_map["KEY"] não é necessária.
+     * obj_map.empty() -> para verificação se existe algum elemente a ser inserido ou não
+     * @arg no_quote: values in obj_map que não serão colocados in quote() function para serem inseridos no sql.
+     * é necessário apenas inserir o nome da chave.
+     * ex: no_quote = {"id", "money"} => NÃO será executado: quote(obj_map["id"]) e quote(obj_map["money"]) para
+     * inserir os valores no sql
+     * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+     */
+	template<typename MAP_T>
+	void insert(const std::string& table_name, const MAP_T& obj_map,
+                const std::unordered_set<std::string>& no_quote = {}, 
+                const std::string& database_connection = database::database_connection);
 
-	//extern void config(const std::vector<std::string>&& conf);
-	////////////////////////////////////////////////////////////////////////////////
-	// interfaces of the library
-	////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////
-	// general functions of library
-	////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////
-	// general class/interface to abtract the database
-	////////////////////////////////////////////////////////////////////////////////
-	/**
-	 * Necessário para utilizar a função quote() do postgres.
-	 * Somente se consegue acessar ela por meio de uma instância já criada.
-	 * para não quebrar a modularidade, nem inserir demasiados parâmetros, foi
-	 * criado as funções.
-	 * Utilizar essas funções para garantir que o código não quebre ou ocorra
-	 *  algum problema.
-	 * Ela só funciona no postgres (libpqxx) e também.
-	 */
-	////////////////////////////////////////////////////////////////////////////////
-	//  auxiliar classes - quote
-	////////////////////////////////////////////////////////////////////////////////
-	extern pqxx::connection_base* ___CB; // inicialization in "obj.cpp", with value nullptr
-	
-	template<class T>
-	void inline init_quote(const T& t) { ___CB = (pqxx::connection_base*)&t; }
-	
-	template<class T>
-	void inline commit(T& t) {
-		try{ t.commit(); ___CB = nullptr; } catch (const std::exception &e) { throw err(e.what()); }}
-	
-	std::string inline quote(const std::string& s) {
-		try{ return ___CB->quote(s); } catch (const std::exception &e) { throw err(e.what()); }}
-	
-	////////////////////////////////////////////////////////////////////////////////
-	// general class to bind a row of a line in a object
-	////////////////////////////////////////////////////////////////////////////////
-	/**
-	 * o objetivo desta classe é representar o campo da linha de maneira mais
-	 * uniforme e transparente possível.
-	 * obs: item_type = representa os tipos que o valor 
-	 */
-	enum class field_type {
-		NO_TYPE, STR, CHAR, INT, LONG, LONG_LONG,
-		UCHAR, UINT, ULONG, ULONG_LONG,
-		FLOAT, DOUBLE, LONG_DOUBLE
-	};
+    
+    /**
+     * Run the select sql on database and retrieve data, and put data on SET_T collection.
+     * @obs: os valores são transformados em std::string para a inserção nas estruturas de resposta.
+     * @obs: os valores do tipo NULL são transformados em uma string vazia -> "".
+     * @obs SET_T: é a estrutura que conterá os MAP_T que foram as linhas da resposta do sql.
+     * a estrutura deve conter a seguinte interface:
+     * SET_T set = {}; set.push_back(map); onde map é do tipo MAP_T.
+     * para não interfeir na ordem dos resultados do sql, a função push_back(), espera-se que
+     * ela insira os dados ao final da estrutura, para manter a ordem retornada pelo sql.
+     * exemplos de estruturas compatíveis: std::vector<> e std::list<>
+     * @obs MAP_T: é a estrutura que conterá a resposta de uma linha do resultado do sql.
+     * deve ser possível a seguinte inserção:
+     * MAP_T map = {}; map["column_name"] = column_value; -> onde:
+     * column_name: é o nome da coluna.
+     * column_value: é o valor da coluna.
+     * a cada chamada de map["column_name"] = column_value; deve-se inserir uma nova tupla na estrutura.
+     * exemplos de estruturas compatíveis: std::map<> e std::unordered_map<>
+     * @obs: exemplo de uso da função:
+     * const auto R = database::select<std::vector, std::unordered_map<std::string, std::string>>(sql, DATABASE_CONNECTION);
+     * com isto o SET_T será ao final: std::vector<std::unordered_map<std::string, std::string>>, pois ele é
+     * passado como um template para a função
+     * @arg sql: string contendo o sql que será executado no banco de dados.
+     * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+     * @return uma coleção definida do tipo SET_T que conterá a resposta do sql.
+     */
+    template<template<typename> typename SET_T, typename MAP_T>
+    SET_T<MAP_T> select(const std::string& sql, const std::string& database_connection = database::database_connection);
 	
 	/**
-	 * muitos ainda não foram implementados - verificar
-	 * @import: quote: by default is always executed in check_write(), for not executed quote use: no_quote
-	 * se o tipo não for string, no momento da executação do quote, a função check_write() levanta uma exceção.
-	 * a função check_write() - sempre executa o quote como última opção de todas as opções escolhidas.
-	 * a função check_read() - por default não executa o quote.
-	 * o quote é executado pela função d::quote() - acima codificada.
-	 * @implemented check_write: quote notnull
-	 * @implemented check_read: null0 notnull
-	 */
-	enum class fopt { // options to field
-		notnull, //primary_key, foreign_key, // column options
-		trim, rtrim, ltrim, upper, lower, // string options
-		null0, // numeric options: null0 > replace null or empty string with 0
-		in, not_in, // lists or vectors that value must be one element or not be
-		quote, no_quote // execute quote - always in check_write() - is the last option to be executed
-	};
-	
-	class field {
-	 protected:
-		std::variant<D_FIELD_TYPES> val = "";
-		field_type def = field_type::STR; // tipo de construção | usado para escolher qual será o padrão de conversão no select do sql, para automatizar e também deixar mais legível qual é o tipo deste campo
-		std::unordered_set<std::string> _name = {}; //column name of field or others alias to identify this field in sql statement
-	 	std::vector<fopt> _opt = {}; // options of field
-	 public:
-	 	////////////////////////////////////////////////////////////////////////////////
-		// public functions - constructor
-		////////////////////////////////////////////////////////////////////////////////
-		field() {}
-	 	/**
-	 	 * somente a parte do const std::unordered_set<std::string>& name = {} está implementada
-	 	 * falta implementar transformar as strings de opt em opt.
-	 	 */
-	 	field(const std::vector<std::string>& opt, const std::unordered_set<std::string>& name = {});
-	 	
-	 	//field(const std::vector<fopt>& opt, const std::unordered_set<std::string>& name);
-	 	
-	 	////////////////////////////////////////////////////////////////////////////////
-		// public functions
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * Inicializa o vetor _opt com as opções existentes no vector.
-		 * Caso _opt tenha alguma opção que não esteja em VOpt, esta opção será apagada.
-		 */
-		void init_opt(const std::vector<std::string>& VOpt);
-		
-	 	// return the conteiner that get the names of this field
-	 	inline std::unordered_set<std::string>& name() { return _name; }
-	 	
-	 	// return the conteiner that get the names of this field
-	 	inline std::vector<fopt>& opt() { return _opt; }
-	 	
-	 	/**
-	 	 * print the options of field
-	 	 */
-	 	void print_opt() const;
-	 	
-	 	/**
-	 	 * print the name of fields
-	 	 */
-	 	void print_name() const;
-	 	
-	 	/**
-	 	 * return a string that represents the index.
-	 	 * ex: index = 1 -> returned: "string"
-	 	 */
-		std::string type() const;
-		
-		/**
-		 * return the representation of type in enum field_type.
-		 * example: type is string: etype() = field_type::STR | index: 1 | type() = "string" | 
-		 */
-		inline field_type etype() const { return static_cast<field_type>(val.index()); }
-		
-		/**
-		 * val.index()
-		 */
-		inline int index() const { return val.index(); }
+     * Run the select sql on database and retrieve data, and put data on MAP_T collection.
+	 * Esta função espera apenas que o sql retorne uma única linha, caso retorne mais, é lançaco uma exceção.
+     * @obs: os valores são transformados em std::string para a inserção nas estruturas de resposta.
+     * @obs: os valores do tipo NULL são transformados em uma string vazia -> "".
+     * @obs MAP_T: é a estrutura que conterá a resposta de uma linha do resultado do sql.
+     * deve ser possível a seguinte inserção:
+     * MAP_T map = {}; map["column_name"] = column_value; -> onde:
+     * column_name: é o nome da coluna.
+     * column_value: é o valor da coluna.
+     * a cada chamada de map["column_name"] = column_value; deve-se inserir uma nova tupla na estrutura.
+     * exemplos de estruturas compatíveis: std::map<> e std::unordered_map<>
+     * @obs: exemplo de uso da função:
+     * const auto R = database::select1<std::unordered_map<std::string, std::string>>(sql, DATABASE_CONNECTION);
+	 * @obs: esta função executa o sql pela seguinte função:
+	 * pqxx::nontransaction::exec1(sql);
+	 * isto significa que se o sql retornar mais de uma linha, é lançado uma exceção.
+     * @arg sql: string contendo o sql que será executado no banco de dados.
+     * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+     * @return uma estrutura do tipo MAP_T que conterá a resposta do sql.
+     */
+    template<typename MAP_T>
+    MAP_T select1(const std::string& sql, const std::string& database_connection = database::database_connection);
 
+    /**
+     * Run the select sql on database and retrieve data, and return the object of the library of database.
+     * A letra 'r' representa result, ou seja, este select retorna o resultado original que a biblioteca do banco de dados retorna.
+     * Executa a função "exec"
+     * @arg sql: string contendo o sql que será executado no banco de dados.
+     * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+     * @return retorna o objeto da biblioteca do banco de dados que representa o resultado do sql.
+     * Por exemplo, para a biblioteca "pqxx" que representa o banco de dados "postgres", o objeto que 
+     * representa o resultado da busca sql é o "pqxx::result". é este objeto que é retornado neste caso.
+     */
+    auto selectr(const std::string& sql, const std::string& database_connection = database::database_connection);
+    
+    /**
+     * Run the update sql on the database.
+     * @obs: Executa função: exec0() -> se o banco de dados retornar algum resultado dispara uma exceção.
+     * @obs: todas os valores, por default, são colocados em quotes pela função quote do PGSQL.
+     * para retirar algum valor do quote(obj_map["KEY"]) inserir a KEY no argumento no_quote.
+     * @obs: é esperado que todos os valores de obj_map["KEY"] sejam std::string
+     * @arg table_name: nome da tabela que será inserido os dados constantes em obj_map.
+     * @arg obj_map: objeto tipo map que contém os dados que serão atualizados na tabela.
+     * O obj_map segue algumas funções básicas do std::map<> e std::unordered_map<>,  etc..
+     * É esperado que o obj_map mapeie strings para strings.
+     * Exemplos de obj_map válidos: std::map<std::string,std::string> e std::unordered_map<std::string,std::string>
+     * O obj_map deve responder as seguintes funções:
+     * for(const auto& elem : obj_map) -> retorna cada elemento do obj_map
+     * elem.first -> retorna a chave do elemento -> elem.first = "KEY"
+     * elem.second -> retorna o valor da chave no elemento -> obj_map["KEY"].
+     * obj_map.empty() -> para verificação se existe algum elemente a ser inserido ou não
+     * obj_map["KEY"] -> retorna o valor correspondente a chave "KEY" no map
+     * @arg key_where: as chaves do map que irão ser colocados na parte WHERE do SQL.
+     * deve-se inserir as chaves do map neste conjunto, exemplo: key_where = {"key1", "key20"}
+     * se a variável key_where for vazia, key_where = {}, nenhum valor do map é inserido de maneira automática na
+     * parte WHERE do SQL.
+     * as chaves serão sempre conjungadas pelo operador 'AND' do SQL.
+     * exemplo:
+     * key_where = {"key1", "key20"} -> gera: key1 = 'obj_map["key1"]' AND key2 = 'obj_map["key20"]'
+     * @arg key_set: as chaves do map que irão ser colocados na parte SET do SQL.
+     * deve-se inserir as chaves do map neste conjunto, exemplo: key_set = {"key1", "key20"}
+     * se uma chave for inserida tanto na variável key_set e key_where, tal chave com seu respectivo valor somente
+     * será inserida na parte WHERE do SQL, será como se ela não foi inserida na variável key_set.
+     * se a variável key_where for vazia, key_where = {}, todos os valores do obj_map serão inseridos na parte SET, desde
+     * que a chave não esteja também na variável key_where.
+     * exemplo: obj_map tem as seguintes chaves: {"key1", "key2", "key3"}
+     * se: key_set = {"key1"} e key_where = {"key2"}
+     * tem-se o sql terá: SET key1 = 'obj_map["key1"]' WHERE key1 = 'obj_map["key2"]'
+     * se: key_set = {} e key_where = {"key2"}
+     * tem-se o sql terá: SET key1 = 'obj_map["key1"]', key3 = 'obj_map["key3"]' WHERE key1 = 'obj_map["key2"]'
+     * @arg no_quote: values in obj_map que não serão colocados in quote() function para serem inseridos no sql.
+     * é necessário apenas inserir o nome da chave.
+     * ex: no_quote = {"id", "money"} => NÃO será executado: quote(obj_map["id"]) e quote(obj_map["money"]) para
+     * inserir os valores no sql
+     * @arg where_sql: string que é adiciona ao final das inserções do key_where na parte WHERE do sql.
+     * esta string é para o caso do WHERE precisar ser mais complexo.
+     * a operação que é feita, caso where_sql não seja vazio é a seguinte:
+     * where += where_sql;
+     * ou seja, o usuário deve informar no sql qual é o operador de ligação com a parte anterior do where.
+     * exemplo: where_sql = "AND id > 3" ou where_sql = "OR NOT id < 20"
+     * se a string for vazia, ela é ignorada
+     * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+     */
+    template<typename MAP_T>
+    void update(const std::string& table_name, const MAP_T& obj_map,
+                const std::unordered_set<std::string>& key_where = {},
+                const std::vector<std::string>& key_set = {},
+                const std::unordered_set<std::string>& no_quote = {},
+                const std::string& where_sql = "",
+                const std::string& database_connection = database::database_connection);
 
-		/**
-		 * Check and trata the values to write in database.
-		 * Check and trata the values to read from database.
-		 */
-		void check_write();
-		void check_read();
-		
-		////////////////////////////////////////////////////////////////////////////////
-		// check functions
-		////////////////////////////////////////////////////////////////////////////////
-		void inline check_notnull() { 
-			try { if( str().empty() )
-					throw err("Value of field is null or empty string. "
-						"Forbidden by \"notnull\" field option."); }
-			catch (const std::exception &e) { throw err(e.what()); } }
-		
-		void inline check_null0() { try { if( str().empty() ) set() = "0"; }
-			catch (const std::exception &e) { throw err(e.what()); } }
-		
-		
-		////////////////////////////////////////////////////////////////////////////////
-		// check functions END
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * cast the string type to another type.
-		 * example: the value of field is a string "3"
-		 * afther str_to(field_type::INT) -> the value of field is a int 3
-		 * if: type = NO_TYPE -> throw error
-		 * if: type = STR -> does nothing
-		 * if: this->etype() != STR -> throw error
-		 */
-		void str_to(const field_type& type);
-		
-		void str_to(const std::string& type);
-		
-		
-		/**
-		 * create a string with the val value.
-		 * @obs: if val is string format, then returned: get<string>(val)
-		 * @obs: this function does not change the val, the val format or its value.
-		 * @obs: if the val is std::monostate is returned "" - empty string
-		 */
-		std::string str() const;
-				
-		/**
-		 * set the value of variant type.
-		 * example: var["column_name"].set() = "string";
-		 * var["column_name"].set() = 3;
-		 */
-		inline std::variant<D_FIELD_TYPES>& set() { return val; };
-		
-		////////////////////////////////////////////////////////////////////////////////
-		// GET functions
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * return the variable in type of variant.
-		 * @obs: for string only: var["column_name"].get() = var["column_name"].str()
-		 * example -string: string str = var["column_name"].get() + "test"; or 
-		 * string str = var["column_name"].get<std::string>() + "test";
-		 * example -int: int i = var["column_name"].geti() + 5; or 
-		 * int i = var["column_name"].get<int>() + 5;
-		 * example -char: char c = var["column_name"].getc() + 5; or 
-		 * if( i == (var["column_name"].get<char>() || 'c')) ...;
-		 */
-		inline std::string get()  const {
-			try{ return std::get<std::string>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		inline int geti() const {
-			try { return std::get<int>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		inline char getc() const { try { return std::get<char>(val); } catch (const std::exception &e){throw err(e.what());}}
-		inline long getl() const { try { return std::get<long>(val); } catch (const std::exception &e){throw err(e.what());}}
-		inline float getf() const { try { return std::get<float>(val); } catch (const std::exception &e){throw err(e.what());}}
-		inline double getd() const{ try{ return std::get<double>(val); } catch (const std::exception &e){throw err(e.what());}}
-		
-		inline long long getll() const {
-			try { return std::get<long long>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		inline unsigned long getul() const {
-			try { return std::get<unsigned long>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		inline long double getld() const {
-			try { return std::get<long double>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		template<typename T>
-		inline T get() const{ try{ return std::get<T>(val); } catch (const std::exception &e) { throw err(e.what()); }}
-	};
-	
-	/**
-	 * significa qual tipo de parser será executado
-	 * CONCAT: estilo cout
-	 * FORMAT: estilo printf - não implementado ainda
-	 */
-	enum class kind {
-		FORMAT, CONCAT
-	};
-	
-	class obj; // fowarding definition
-	
-	class sql {
-	 protected:
-		kind _kind;
-		std::vector<std::string> statement = {};
-		
-	 public:
-	 	////////////////////////////////////////////////////////////////////////////////
-	 	// constructors
-	 	////////////////////////////////////////////////////////////////////////////////
-	 	/**
-	 	 * kind: tipo de sql - por enquanto somente o kind::concat está implementado
-	 	 * @important: como funciona o kind::concat:
-	 	 * o statement é o sql que será executado em formato bruto, ou seja, o sql
-	 	 * com combinado com as chaves do objeto que sofrerão a substituição.
-	 	 * a ideia deste tipo de concat é inspirada no cout << do c++.
-	 	 * A primeira string do vetor statement, sempre é um sql puro (pedaço dele),
-	 	 * e a outra, sempre é uma string que representa uma chave do field ou um valor contido na estrutura field.name(),
-	 	 * a próxima sempre é um outro pedaço do sql puro, e assim sucessivamente.
-	 	 * As possições pares do vetor, sempre serão ocupadas por sql puro
-	 	 * e as posições ímpares sempre por uma string que representa uma chave de um campo do objeto.
-	 	 * @obs: a função verifica todas as chaves dos fields, e somente caso não encontrado, é que ela começa a verficiar
-	 	 * pelos valores em field.name(). Caso uma chave de um field e um dos valores de field.name(), que pode conter vários,
-	 	 * forem iguais, sempre será substituído pela chave do map (chave do map que aponta para o field), pois é buscado
-	 	 * nele primeiro.
-	 	 * @obs: ao final, automaticamente se coloca o caracter ';', para demarcar o fim.
-	 	 * @obs: são aceitos posições com strings vazias, porém, se for um field_key, ele
-	 	 * ainda assim, será testado.
-	 	 * @exemplo: o std::vector<std::string>& statement = { "SELECT * from COMPANY" }
-	 	 * será transformado em: "SELECT * from COMPANY;"
-	 	 * @exemplo: o statement = { "SELECT * from ", "table" }
-	 	 * e no std::unordered_map<std::string, field>& M, contenha um tupla: ["table"] = "COMPANY" ou ["table"].name() = { "COMPANY" }
-	 	 * será transformado em: "SELECT * from COMPANY;"
-	 	 * @obs: sempre antes de escrever no sql final, cada valor de chave, antes é chamado
-	 	 * a função: check_write() de field.
-	 	 * sempre depois de colocar os valores no campo de field, sempre é executado
-	 	 * imediatamente após a função: check_read() de field.
-	 	 * @obs: a própria função, já transforma para string as chaves que não são string (int, float, etc..)
-	 	 * por meio da função: str() da classe field antes da escrita.
-	 	 * @obs: as funções são sempre escritas em field.set(), como string: F.set() = R.is_null() ? "" : R.as<std::string>();
-	 	 */
-		sql(const kind& _kind, const std::vector<std::string>& statement);
-		
-		sql(const std::vector<std::string>& statement); // set this->_kind = kind::CONCAT
-		
-		////////////////////////////////////////////////////////////////////////////////
-	 	// public functions
-	 	////////////////////////////////////////////////////////////////////////////////
-	 	/**
-	 	 * T = pqxx::work or pqxx::nontransaction
-	 	 * necessary to execute exec0 and exec1
-	 	 */
-	 	template<class T>
-	 	void run0(const obj& O, T& W); // roda a query por meio da função pqxx::exec0
-	 	
-	 	template<class T>
-		void run0(const std::vector<obj>& V, T& W);
-		
-		template<class T>
-	 	void run1(obj& O, T& W); // roda a query por meio da função pqxx::exec1
-	 	
-	 	template<class T>
-		void run1(std::vector<obj>& V, T& W);
-	 	
-	 	/**
-	 	 * exibe informações da query:
-	 	 * tipo do sql: kind
-	 	 * imprime o vetor statement, com divisão, entre o que é chave e o que é sql puro.
-	 	 */
-	 	void print();
-	 	
-	 	/**
-	 	 * imprime todas as chaves do map e todos os nomes de cada field - map<std::string e field.name()
-	 	 * realiza o procedimento acima para todos os elementos do vetor.
-	 	 * dado uma entrada, esta função imprime o que o sql entende que são as possíveis chaves para o statement
-	 	 */
-	 	void print_key(const std::vector<obj>& V);
-	 	
-	 	/**
-	 	 * Retorna a query já pronta do sql para ser executada.
-	 	 * Pega a variável statement (array de strings que são textos puros de sql + field_key (or field.name())
-	 	 * e transforma este vetor em uma query.
-	 	 * substitui os valores de field_key (or field.name()) pelos correspondentes existente no vetor V passado.
-	 	 * @return: a string de retorno pode já ser executada: ex: W.exec(sql.make_query(V));
-	 	 */
-	 	std::string make_query(const std::vector<obj>& V);
-	 	
-	 	void copy_result(const pqxx::row& Row, std::vector<obj>& V);
-
-	 private:
-		////////////////////////////////////////////////////////////////////////////////
-	 	// auxiliar functions
-	 	////////////////////////////////////////////////////////////////////////////////
-		field& get_field(const std::string& key, 
-			const std::vector<obj>& V, const size_t idx = 0);
-		field& get_field_by_name(const std::string& key,
-			const std::vector<obj>& V, const size_t idx = 0);
-		
-		std::string make_query_concat(const std::vector<obj>& V);
-		std::string make_query_format(const std::vector<obj>& V);
-	};
-	
-	/**
-	 * Serve para controlar internamente qual tipo de runX (exec, exec1 or exec0) será executado
-	 */
-	enum class erun {
-		run, run0, run1
-	};
-	
-	/**
-	 * a ideia é transformar cada linha de uma tabela em um objeto.
-	 * pode-se fazer uma "coleção de objetos" que não é nada mais que um vetor de objetos
-	 * esta classe representa apenas uma linha de uma tabela
-	 */
-	class obj {
-	 protected:
-		std::unordered_map<std::string, field> _field = {}; // col = column -> [column_name] = column_value
-		std::unordered_set<std::string> _primary_key = {};
-		std::unordered_map<std::string, sql> _sql_real = {};
-		/**
-		 * Conjunto de sqls fakes ou reais.
-		 * cada sql fake, executa na verdade, os sqls cujos estão ele tem guardado no seu vetor.
-		 * utilizado para guardar e otimizar um conjunto de operações, agrupando-as todas sob
-		 * um mesmo nome e executando elas apenas com uma chamada.
-		 * quando um sql fake é chamado, o commit é executado somente após o último sql.
-		 * ideal para realizar roolbacks de vários sqls.
-		 */
-		std::unordered_map<std::string, std::vector<std::string>> _sql_fake = {};
-		
-	  public:
-	  	////////////////////////////////////////////////////////////////////////////////
-		// constructors
-		////////////////////////////////////////////////////////////////////////////////
-		obj() {}
-		
-	  	obj(const std::vector<std::string>& field_key,
-		  	const std::unordered_set<std::string>& primary_key = {},
-	  		const std::unordered_map<std::string, sql>& sql_real = {},
-	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
-	  	
-	  	obj(const std::unordered_map<std::string, field>& _field,
-	  		const std::unordered_set<std::string>& primary_key = {},
-	  		const std::unordered_map<std::string, sql>& sql_real = {},
-	  		const std::unordered_map<std::string, std::vector<std::string>>& sql_fake = {});
-	
-		////////////////////////////////////////////////////////////////////////////////
-		// public functions - auxiliar functions
-		////////////////////////////////////////////////////////////////////////////////
-		inline std::unordered_set<std::string>& primary_key() { return _primary_key; };
-		
-		/**
-		 * print all information about the field in the class.
-		 * print all values of all fields in class (key, value, type, options, names)
-		 */
-	  	void print() const;
-	  	
-	  	/**
-	  	 * print values
-	  	 * print only the values of field in class.
-	  	 * this functions is for print the values of table
-	  	 * @arg: msg_init -> string que aparecerá no começo da linha em que se imprimirão os valores
-	  	 */
-	  	void printv(const std::string msg_init) const;
-	  	
-	  	/**
-	  	 * overloading para fazer um sintaxe suggar no código.
-	  	 * retorna o valor do campo da coluna especificada.
-	  	 * caso não exista a coluna na classe, é lançado uma exceção.
-	  	 * exemplos:
-	  	 * escrita, atribuição do valor: var["column_name"].set() = 3;
-	  	 * leitura do valor em uma expressão: int result = 1 + var["column_name"].geti();
-	  	 * escrita, atribuição do valor: var["column_name"].set() = "string_test";
-	  	 * leitura do valor em uma expressão: string str = "init_str" + var["column_name"].get();
-	  	 * escrita, atribuição do valor: var["column_name"].set() = 3.14;
-	  	 * leitura do valor em uma expressão: int result = 1 + var["column_name"].geti();
-	  	 */
-	  	field& operator [] (const std::string& column_name);   // write mode
-	  	const field& operator[](const std::string& key) const; // read mode
-	  	
-	  	inline const bool empty() const { return _field.empty(); }
-	  	
-	  inline virtual const size_t size()  const {
-			try{ return _field.size(); } catch (const std::exception &e) { throw err(e.what()); }}
-		//try{ throw err("me*********"); } catch (const std::exception &e) { throw err(e.what()); }}
-	  	
-	  	/**
-	  	 * Updating the values of map this->col.
-	  	 * If exists a key in row that not exists in "this->col" -> throw an exception u::error
-	  	 * TODAS as chaves in row devem existir em this->col -> throw an exception u::error
-	  	 * obs: row pode ser apenas um subconjunto de this->col, não precisa conter todas as chaves de this->col.
-	  	 */
-	  	void set(const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_);
-	  	
-	  	/**
-	  	 * Recuperar um elemento da estrutura _field, sem a necessidade de visualizar a estrutura armazenada
-	  	 * Para maior modularidade, sempre usar: auto X = my_obj.find(field_key);
-	  	 * Deve enviar o interator, para o usuário testar se realmente existe a chave.
-	  	 * Se utilizar o operator[] em caso de falha throw error(), neste caso deve-se fazer um try-catch
-	  	 * O interator já é padrão do c++, então facilita a leitura e entendimento do código
-	  	 */
-	  	inline  std::unordered_map<std::string, field>::iterator find(const std::string& field_key) {
-	  		try { return _field.find(field_key); } catch (const std::exception &e) { throw err(e.what()); }}
-	  	
-	  	inline  std::unordered_map<std::string, field>::const_iterator find(const std::string& field_key) const {
-	  		try { return _field.find(field_key); } catch (const std::exception &e) { throw err(e.what()); }}
-	  	////////////////////////////////////////////////////////////////////////////////
-		// public functions - for range interators - for work with for range loop
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * This code is for use:
-		 * obj O
-		 * for(auto const& it : O)
-		 * where it is the one element of std::unordered_map<std::string, field> _field
-		 * for(auto const& it : O) = for(auto const& it : O._field)
-		 */
-		 inline std::unordered_map<std::string, field>::iterator begin(){
-        	return _field.begin();
-		 }
-	     inline std::unordered_map<std::string, field>::iterator end(){
-    	    return _field.end();
-    	 }
-    	 inline std::unordered_map<std::string, field>::const_iterator begin() const {
-    	    return _field.begin();
-    	 }
-    	 inline std::unordered_map<std::string, field>::const_iterator end() const {
-    	    return _field.end();
-    	 }
-    	 /**
-    	  * Essas duas funções abaixo são importantes, para o interador, entretando
-    	  * eu já tenho feito elas acima, pois adicionei checks para elas.
-    	  * deixei elas pois são do código original que eu copei na internet
-    	  * e caso queira reusar o original tenho elas
-    	  *
-    	 inline const int& operator[](const std::string& key) const {
-    	    return _field.at(key);
-    	 }
-    	 inline int& operator[](const std::string& key) {
-    	    return _field[key];
-    	 }*/
-	  	
-	  	////////////////////////////////////////////////////////////////////////////////
-		// public functions - sql functions
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * O 'n' antes do run, significa que é o tipo de  transação é pqxx::nontransaction
-		 * Somente o run, significa que é o tipo de  transação é pqxx::work
-		 * O '0' depois do run, significa que é executado exec0 > não tem resposta do banco
-		 * O '1' depois do run, significa que é executado o exec1 > a reposta é apenas 1 linha
-		 * Caso a resposta não seja do tamanho esperado, levanta uma exceção.
-		 */
-	  	void run0(const std::vector<std::string>& sql_key,
-	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
-		void run1(const std::vector<std::string>& sql_key,
-	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
-	  	void nrun0(const std::vector<std::string>& sql_key,
-	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
-	  	void nrun1(const std::vector<std::string>& sql_key,
-	  		const std::unordered_map<std::string, std::variant<D_FIELD_TYPES>>& _field_ = {});
-	  	////////////////////////////////////////////////////////////////////////////////
-		// private functions
-		////////////////////////////////////////////////////////////////////////////////
-	  	private:
-	  	template<class T>
-		void xrunX(const std::vector<std::string>& sql_key, const erun Type, T& W);
-		
-		/**
-		 * verifica se existe chave iguais nos maps: _sql_real and _sql_fake
-		 */
-		void check_equal_key_sql_real_fake();
-	};
-	
-	
-	/**
-	 * Agrupa um conjunto de objetos.
-	 * Para ser utilizado quando um sql retornar mais de uma resultado.
-	 */
-	 class table {
-	  protected:
-	  	obj _model = {};
-	  	std::vector<obj> _obj = {};
-	  	/**
-	  	 * Realiza 
-	  	 */
-	  	//std::unordered_map<std::string, std::unordered_multimap<std::string, int>> _primary_key;
-		
-	  public:
-	  	////////////////////////////////////////////////////////////////////////////////
-		// constructors
-		////////////////////////////////////////////////////////////////////////////////
-		table() {}
-	  	table(const obj& Obj);
-	
-		////////////////////////////////////////////////////////////////////////////////
-		// public functions - auxiliar functions
-		////////////////////////////////////////////////////////////////////////////////  	
-		inline virtual const size_t size()  const {
-			try{ return _obj.size(); } catch (const std::exception &e) { throw err(e.what()); }}
-		
-		inline virtual void clear()  {
-			try{ return _obj.clear(); } catch (const std::exception &e) { throw err(e.what()); }}
-				
-		inline virtual obj& move(const obj& Obj) {
-			try { _obj.push_back(std::move(Obj)); return _obj.back(); } catch(const std::exception &e) { throw err(e.what()); }}
-		
-		virtual obj& move(const obj& Obj, const size_t idx);
-		
-		// print the table - head (_model object) and the body (values of _obj)
-		virtual void print() const;
-		
-		////////////////////////////////////////////////////////////////////////////////
-		// public functions - sql / run functions
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * 
-		 */
-		template<class T>
-		void refresh(T& Transaction, const sql& Query, 
-					 const std::vector<obj>& VArgQuery, const obj& Model = {});
-		//void update();
-		//void upgrade();
-		
-		////////////////////////////////////////////////////////////////////////////////
-		// public functions - overloading operators
-		////////////////////////////////////////////////////////////////////////////////
-		virtual obj& operator[] (const size_t idx);
-		virtual const obj& operator[] (const size_t idx) const;
-		
-		////////////////////////////////////////////////////////////////////////////////
-		// public functions - for range interators - for work with for range loop
-		////////////////////////////////////////////////////////////////////////////////
-		/**
-		 * This code is for use:
-		 * table T
-		 * for(auto const& it : T)
-		 * where it is the one element of vector<obj> _obj
-		 * for(auto const& it : T) = for(auto const& it : T._obj)
-		 */
-		inline virtual std::vector<obj>::iterator begin(){
-        	return _obj.begin();
-    	}
-	    inline virtual std::vector<obj>::iterator end(){
-    		return _obj.end();
-    	}
-    	inline virtual std::vector<obj>::const_iterator begin() const {
-    		return _obj.begin();
-    	}
-    	inline virtual std::vector<obj>::const_iterator end() const {
-    	    return _obj.end();
-    	}
-    	
-    	////////////////////////////////////////////////////////////////////////////////
-		// private functions - auxiliar functions
-		////////////////////////////////////////////////////////////////////////////////
-		private:
-    	void check_model(const obj& Model);
-    	void copy_result(const pqxx::result& T, const sql& Query);
-	 };
-	
+    /**
+     * Run the delete sql on the database.
+     * @obs: Executa função: exec0() -> se o banco de dados retornar algum resultado dispara uma exceção.
+     * @obs: todas os valores, por default, são colocados em quotes pela função quote do PGSQL.
+     * para retirar algum valor do quote(obj_map["KEY"]) inserir a KEY no argumento no_quote.
+     * @obs: é esperado que todos os valores de obj_map["KEY"] sejam std::string
+     * @arg table_name: nome da tabela que será inserido os dados constantes em obj_map.
+     * @arg obj_map: objeto tipo map que contém os dados que serão deletados da tabela.
+     * O obj_map segue algumas funções básicas do std::map<> e std::unordered_map<>,  etc..
+     * É esperado que o obj_map mapeie strings para strings.
+     * Exemplos de obj_map válidos: std::map<std::string,std::string> e std::unordered_map<std::string,std::string>
+     * O obj_map deve responder as seguintes funções:
+     * for(const auto& elem : obj_map) -> retorna cada elemento do obj_map
+     * elem.first -> retorna a chave do elemento -> elem.first = "KEY"
+     * elem.second -> retorna o valor da chave no elemento.
+     * obj_map.empty() -> para verificação se existe algum elemente a ser inserido ou não
+     * obj_map["KEY"] -> retorna o valor correspondente a chave "KEY" no map
+     * @arg key_where: as chaves do map que irão ser colocados na parte WHERE do SQL.
+     * deve-se inserir as chaves do map neste conjunto, exemplo: key_where = {"key1", "key20"}
+     * se a variável key_where for vazia, key_where = {}, todos os valores do map são inseridos de maneira automática na
+     * parte WHERE do SQL.
+     * as chaves serão sempre conjungadas pelo operador 'AND' do SQL.
+     * exemplo:
+     * key_where = {"key1", "key20"} -> gera: key1 = 'obj_map["key1"]' AND key2 = 'obj_map["key20"]'
+     * @arg no_quote: values in obj_map que não serão colocados in quote() function para serem inseridos no sql.
+     * é necessário apenas inserir o nome da chave.
+     * ex: no_quote = {"id", "money"} => NÃO será executado: quote(obj_map["id"]) e quote(obj_map["money"]) para
+     * inserir os valores no sql
+     * @arg where_sql: string que é adiciona ao final das inserções do key_where na parte WHERE do sql.
+     * esta string é para o caso do WHERE precisar ser mais complexo.
+     * a operação que é feita, caso where_sql não seja vazio é a seguinte:
+     * where += where_sql;
+     * ou seja, o usuário deve informar no sql qual é o operador de ligação com a parte anterior do where.
+     * exemplo: where_sql = "AND id > 3" ou where_sql = "OR NOT id < 20"
+     * se a string for vazia, ela é ignorada
+     * @arg database_connection: string necessária para abrir uma conexão com o banco de dados.
+     * caso nenhuma string é fornecida, é utilizado a variável global do namespace database::database_connection.
+     */
+    template<typename MAP_T>
+    void del(const std::string& table_name, const MAP_T& obj_map,
+             const std::unordered_set<std::string>& key_where = {},
+             const std::unordered_set<std::string>& no_quote = {},
+             const std::string& where_sql = "",
+             const std::string& database_connection = database::database_connection);
+    
 	////////////////////////////////////////////////////////////////////////////////
-	//  error classes
+	//  end namespace database database::
 	////////////////////////////////////////////////////////////////////////////////
-
-	namespace error
-	{
-		// error classes must be defined here
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	//  end namespace database d::
-	////////////////////////////////////////////////////////////////////////////////
-} // end namespace database d::
+} // end namespace database database::
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Implementation of templates and inline functions
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+//  general functions:: templates and inline functions
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// templates
+////////////////////////////////////////////////////////////////////////////////
+template<typename MAP_T>
+void database::insert(const std::string& table_name, const MAP_T& obj_map,
+               const std::unordered_set<std::string>& no_quote,
+               const std::string& database_connection)
+{ try {
+    if(obj_map.empty()) return;
+    if(table_name.empty()) throw err("table name is empty");
+    if(database_connection.empty()) throw err("database connection string is empty");
+    
+    pqxx::connection C(database_connection);
+    std::unique_ptr<pqxx::work> W; // necessário para não precisar de outro try-catch to do roolback - W->abort()
+	try { // necessário for run C.disconnect() in catch()
+    	if(!C.is_open()) throw err("Can't open session database.\nconnection_arg: \"%s\"", database_connection.c_str());
+	    W = std::make_unique<pqxx::work>(C); // inicia uma transação com o banco de dados - Create a transactional object.
+    
+    	////////////////////////////////////////////////////////////////////////////////
+		// monta o sql e executa
+		////////////////////////////////////////////////////////////////////////////////
+    	std::string sql = "INSERT INTO " + table_name + "(";
+        std::string val = ") VALUES (";
+        bool all_values_is_empty = true;
+        for(const auto& E : obj_map) {
+            if(E.second.empty()) continue; // não insere uma chave/valor vazio no sql
+            all_values_is_empty = false;
+            
+            sql += E.first + ",";
+            if(no_quote.find(E.first) == no_quote.end()) { // não encontrou a chave - faz o quote no valor do elemento
+                val += W->quote(E.second) + ",";
+            } else { // para fazer o quote() no valor do elemento - chave do Elemento não está no no_quote
+                val += E.second + ",";
+            }
+        }
+        if(all_values_is_empty) { // se todos os valores do obj_map são vazios, não faz nada
+			C.disconnect (); return;
+		}
+        
+        sql.pop_back(); // retira o último character ',' da string
+        val.pop_back(); // retira o último character ',' da string
+        sql += val + ");"; // acaba de montar o sql quer será executado: une os nomes dos campos com seus valores
+        
+    	W->exec0(sql); // executa o sql - se houver respota retorna erro
+		W->commit(); // somente faz o commit se NÃO ocorreu erro algum no salvamento
+    	C.disconnect ();
+ 	} catch (pqxx::sql_error const &e) {
+ 		W->abort(); C.disconnect();
+ 		throw err("Rollback the transaction. SQL error: %s\nQuery was: \"%s\"", e.what(), e.query().c_str());  
+	} catch(std::exception const& e) { C.disconnect(); throw err(e.what()); }
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<template<typename> typename SET_T, typename MAP_T>
+SET_T<MAP_T> database::select(const std::string& sql, const std::string& database_connection)
+{ try {
+    if(sql.empty()) throw err("sql of select query is empty");
+    if(database_connection.empty()) throw err("database connection string is empty");
+    
+    pqxx::connection C(database_connection);
+	try { // necessário for run C.disconnect() in catch()
+    	if(!C.is_open()) throw err("Can't open session database.\nconnection_arg: \"%s\"", database_connection.c_str());
+	    pqxx::nontransaction N(C);// inicia uma transação com o BD /* Create a notransactional object. */
+    
+        ////////////////////////////////////////////////////////////////////////////////
+		// executa o sql e insere o resultado nas estruturas
+		////////////////////////////////////////////////////////////////////////////////
+    	auto R{ N.exec(sql) }; // executa o sql 
+    	
+    	SET_T<MAP_T> set;
+    	for(const auto& r : R) {
+            MAP_T map;
+            for(const auto& f : r) { // field of row
+                std::string column_name = u::to_str(f.name());
+                std::string value = f.is_null() ? "" : f.as<std::string>();
+                map[column_name] = value;
+            }
+            set.push_back(map);
+    	}
+    	
+    	C.disconnect ();
+        return set;
+ 	} catch (pqxx::sql_error const &e) {
+ 		C.disconnect(); throw err("SQL error: %s\nQuery was: \"%s\"", e.what(), e.query().c_str());
+	} catch(std::exception const& e) { C.disconnect(); throw err(e.what()); }
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<typename MAP_T>
+MAP_T database::select1(const std::string& sql, const std::string& database_connection)
+{ try {
+    if(sql.empty()) throw err("sql of select query is empty");
+    if(database_connection.empty()) throw err("database connection string is empty");
+    
+    pqxx::connection C {database_connection};
+	try { // necessário for run C.disconnect() in catch()
+    	if(!C.is_open()) throw err("Can't open session database.\nconnection_arg: \"%s\"", database_connection.c_str());
+	    pqxx::nontransaction N {C};// inicia uma transação com o BD - Create a notransactional object.
+    
+        ////////////////////////////////////////////////////////////////////////////////
+		// executa o sql e insere o resultado nas estruturas
+		////////////////////////////////////////////////////////////////////////////////
+    	auto R{ N.exec1(sql) }; // executa o sql
+    	
+    	MAP_T map;
+		for(const auto& f : R) { // field of row
+			std::string column_name = u::to_str(f.name());
+			std::string value = f.is_null() ? "" : f.as<std::string>();
+			map[column_name] = value;
+		}
+    	C.disconnect ();
+        return map;
+ 	} catch (pqxx::sql_error const &e) {
+ 		C.disconnect(); throw err("SQL error: %s\nQuery was: \"%s\"", e.what(), e.query().c_str());
+	} catch(std::exception const& e) { C.disconnect(); throw err(e.what()); }
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<typename MAP_T>
+void database::update(const std::string& table_name, const MAP_T& obj_map,
+               const std::unordered_set<std::string>& key_where,
+               const std::vector<std::string>& key_set,
+               const std::unordered_set<std::string>& no_quote, 
+               const std::string& where_sql,
+               const std::string& database_connection)
+{ try {
+    if(obj_map.empty()) throw err("object map is empty");
+    if(table_name.empty()) throw err("table name is empty");
+    if(database_connection.empty()) throw err("database connection string is empty");
+    
+    pqxx::connection C(database_connection);
+    std::unique_ptr<pqxx::work> W; // necessário para não precisar de outro try-catch to do roolback - W->abort()
+	try { // necessário for run C.disconnect() in catch()
+    	if(!C.is_open()) throw err("Can't open session database.\nconnection_arg: \"%s\"", database_connection.c_str());
+	    W = std::make_unique<pqxx::work>(C); // inicia uma transação com o banco de dados - Create a transactional object.
+    
+    	std::string sql = "UPDATE " + table_name + " SET"; // inicializa o sql
+        
+        ////////////////////////////////////////////////////////////////////////////////
+		// monta a parte SET do sql
+        ////////////////////////////////////////////////////////////////////////////////
+        std::string set = "";
+        if(key_set.empty()) { // incluir todas as chaves de obj_map - as chaves no key_where
+            for(const auto& E : obj_map) {
+                if(key_where.find(E.first) != key_where.end()) continue; // não é para inserir a chave
+                
+                set += " " + E.first + "=";
+                if(no_quote.find(E.first) == no_quote.end()) { // não encontrou a chave - faz o quote no valor do elemento
+                    set += W->quote(E.second) + ",";
+                } else { // para fazer o quote() no valor do elemento - chave do Elemento não está no no_quote
+                    set += E.second + ",";
+                }   
+            }
+        } else { // incluir somente as que estão no array key_set
+            for(const auto& KEY : key_set) {
+                if(key_where.find(KEY) == key_where.end()) continue; // não é para inserir a chave
+                
+                set += " " + KEY + "=";
+                if(no_quote.find(KEY) == no_quote.end()) { // não encontrou a chave - faz o quote no valor do elemento
+                    set += W->quote(obj_map[KEY]) + ",";
+                } else { // para fazer o quote() no valor do elemento - chave do Elemento não está no no_quote
+                    set += obj_map[KEY] + ",";
+                }
+            }
+        }
+        
+        if(set.empty()) throw err("SET part of sql is empty");
+        set.pop_back(); // retira o último character ',' da string
+        sql += set;
+        ////////////////////////////////////////////////////////////////////////////////
+		// monta a parte WHERE do sql
+		////////////////////////////////////////////////////////////////////////////////
+        std::string where = "";
+        for(const auto& KEY : key_where) {
+            where += " " + KEY + " = ";
+            if(no_quote.find(KEY) == no_quote.end()) { // não encontrou a chave - faz o quote no valor do elemento
+                where += W->quote(obj_map[KEY]) + " AND ";
+            } else { // para fazer o quote() no valor do elemento - chave do Elemento não está no no_quote
+                where += obj_map[KEY] + " AND ";
+            }
+        }
+        if(!where.empty()) where.erase(where.size()-4); // retira do final a substring "AND "
+        if(!where_sql.empty()) where += where_sql;
+        if(where.empty()) throw err("WHERE part of sql is empty");
+        
+        ////////////////////////////////////////////////////////////////////////////////
+		// finaliza o sql e executa
+		////////////////////////////////////////////////////////////////////////////////
+        sql += " WHERE " + where + ";"; // finaliza o sql
+        //throw err("sql: \"%s\"", sql.c_str());
+    	W->exec0(sql); // executa o sql - se houver respota retorna erro
+		W->commit(); // somente faz o commit se NÃO ocorreu erro algum no salvamento
+    	C.disconnect ();
+ 	} catch (pqxx::sql_error const &e) {
+ 		W->abort(); C.disconnect();
+ 		throw err("Rollback the transaction. SQL error: %s\nQuery was: \"%s\"", e.what(), e.query().c_str());  
+	} catch(std::exception const& e) { C.disconnect(); throw err(e.what()); }
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+
+template<typename MAP_T>
+void database::del(const std::string& table_name, const MAP_T& obj_map,
+            const std::unordered_set<std::string>& key_where,
+            const std::unordered_set<std::string>& no_quote,
+            const std::string& where_sql,
+            const std::string& database_connection)
+{ try {
+    if(obj_map.empty()) throw err("object map is empty");
+    if(table_name.empty()) throw err("table name is empty");
+    if(database_connection.empty()) throw err("database connection string is empty");
+    
+    pqxx::connection C(database_connection);
+    std::unique_ptr<pqxx::work> W; // necessário para não precisar de outro try-catch to do roolback - W->abort()
+	try { // necessário for run C.disconnect() in catch()
+    	if(!C.is_open()) throw err("Can't open session database.\nconnection_arg: \"%s\"", database_connection.c_str());
+	    W = std::make_unique<pqxx::work>(C); // inicia uma transação com o banco de dados - Create a transactional object.
+    
+    	std::string sql = "DELETE FROM " + table_name + " WHERE "; // inicializa o sql
+        
+        ////////////////////////////////////////////////////////////////////////////////
+		// monta a parte WHERE do sql
+        ////////////////////////////////////////////////////////////////////////////////
+        std::string where = "";
+        if(key_where.empty()) { // incluir todas as chaves de obj_map - as chaves no key_where
+            for(const auto& E : obj_map) {
+                where += " " + E.first + "=";
+                if(no_quote.find(E.first) == no_quote.end()) { // não encontrou a chave - faz o quote no valor do elemento
+                    where += W->quote(E.second) + " AND ";
+                } else { // para fazer o quote() no valor do elemento - chave do Elemento não está no no_quote
+                    where += E.second + " AND ";
+                }   
+            }
+        } else { // incluir somente as que estão no array key_where
+            for(const auto& KEY : key_where) {
+                where += " " + KEY + "=";
+                if(no_quote.find(KEY) == no_quote.end()) { // não encontrou a chave - faz o quote no valor do elemento
+                    where += W->quote(obj_map[KEY]) + " AND ";
+                } else { // para fazer o quote() no valor do elemento - chave do Elemento não está no no_quote
+                    where += obj_map[KEY] + " AND ";
+                }
+            }
+        }
+        
+        if(!where.empty()) where.erase(where.size()-4); // retira do final a substring "AND "
+        if(!where_sql.empty()) where += where_sql;
+        if(where.empty()) throw err("WHERE part of sql is empty");
+        
+        ////////////////////////////////////////////////////////////////////////////////
+		// finaliza o sql e executa
+		////////////////////////////////////////////////////////////////////////////////
+        sql += where + ";"; // finaliza o sql
+        //throw err("sql: \"%s\"", sql.c_str());
+    	W->exec0(sql); // executa o sql - se houver respota retorna erro
+		W->commit(); // somente faz o commit se NÃO ocorreu erro algum no salvamento
+    	C.disconnect ();
+ 	} catch (pqxx::sql_error const &e) {
+ 		W->abort(); C.disconnect();
+ 		throw err("Rollback the transaction. SQL error: %s\nQuery was: \"%s\"", e.what(), e.query().c_str());  
+	} catch(std::exception const& e) { C.disconnect(); throw err(e.what()); }
+ } catch (const std::exception &e) { throw err(e.what()); }
+}
+////////////////////////////////////////////////////////////////////////////////
 // class sql
 ////////////////////////////////////////////////////////////////////////////////
-template<class T>
-void d::sql::run0(const obj& O, T& W)
-{ try {
-    W.exec0( make_query( { O } ) );
- } catch (const std::exception &e) { throw err(e.what()); }
-}
 
-template<class T>
-void d::sql::run0(const std::vector<obj>& V, T& W)
-{ try {
-    W.exec0( make_query(V) );
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-template<class T>
-void d::sql::run1(obj& O, T& W)
-{ try {
-    pqxx::row R{ W.exec1( make_query( {O} ) ) };
-    std::vector<obj> V = {};
-    V.push_back(std::move(O));
-    copy_result(R, V);
-    O = std::move(V[0]);
-    //copy_result(R, { std::forward(M) }); // TODO - erro - fazer esse código funcionar
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-template<class T>
-void d::sql::run1(std::vector<obj>& V, T& W)
-{ try {
-    pqxx::row R{ W.exec1( make_query(V) ) };
-    copy_result(R, V);
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// class obj
-////////////////////////////////////////////////////////////////////////////////
-template<class T>
-void d::obj::xrunX(const std::vector<std::string>& sql_key, const erun Type, T& W)
-{ try {
-	for(auto const& key : sql_key)
-    {
-    	const auto v = _sql_fake.find(key);
-    	if(v != _sql_fake.end()) xrunX(v->second, Type, W); // chamada recursiva, para fazer a busca em profundidade.
-    	else {
-	    	const auto SQL = _sql_real.find(key);
-    		if(SQL == _sql_real.end()) {
-    			print(); throw err("no found sql_key in field of object. - sql_key: \"%s\"", key); }
-    	
-    		switch(Type) {
-	    		case erun::run0: SQL->second.run0(*this, W); break;
-	    		case erun::run1: SQL->second.run1(*this, W); break;
-	    		default: throw err("enumeration erun index does not exists: %d", static_cast<int>(Type)); }
-    	}
-    }
- } catch (const std::exception &e) { throw err(e.what()); }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// class table
-////////////////////////////////////////////////////////////////////////////////
-template<class T>
-void d::table::refresh(T& Transaction, const sql& Query, 
-	const std::vector<obj>& VArgQuery, const obj& Model)
-{ try {
-	check_model(Model);
-	init_quote(Transaction);
-	const std::string query = const_cast<sql&>(Query).make_query(VArgQuery);
-	//std::printf("QUERY = \"%s\"\n", query.c_str());
-	pqxx::result R( Transaction.exec( query ));
-	copy_result(R, Query);
- } catch (const std::exception &e) { throw err(e.what()); }
-}
 #endif // DATABASEPP_H
 
 ////////////////////////////////////////////////////////////////////////////////

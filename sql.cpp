@@ -31,7 +31,7 @@ void d::sql::print()
 	bool text = true;
 	for(size_t i=0; i < statement.size(); ++i)
 	{
-		msg += u::format("[%ld][%s]: \"%s\"\n", i+1, 
+		msg += u::sprintf("[%ld][%s]: \"%s\"\n", i+1, 
 			text ? "text" : "key", statement[i].c_str());
 		text = !text;
 	}
@@ -49,12 +49,12 @@ d::sql::print_key(const std::vector<obj>& V)
    	int i = 0;
    	for(auto const& M : V)
    	{
-   		msg += u::format("[%d]: {", ++i);
+   		msg += u::sprintf("[%d]: {", ++i);
    		for(auto const& e : M)
    		{
-   			msg += u::format("\"%s\" (", e.first.c_str()); // imprime a chave do map
+   			msg += u::sprintf("\"%s\" (", e.first.c_str()); // imprime a chave do map
    			auto const& Name = const_cast<field&>(e.second).name();
-   			for(auto const& n : Name) msg += u::format("\"%s\", ", n.c_str()); // imprime o nome do field
+   			for(auto const& n : Name) msg += u::sprintf("\"%s\", ", n.c_str()); // imprime o nome do field
    			if(Name.empty() == false) { msg.pop_back(); msg.pop_back(); }
    			msg += "), ";
    		}

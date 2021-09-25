@@ -49,22 +49,22 @@ d::obj::print() const // utilizando o err para mandar a saída não somente no s
 	
 	for(auto const& a: _field)
 	{
-		//msg += u::format("[\"%s\"] \"%s\" | Type: \"%s\" | Index: %d\n | Options: (", a.first.c_str(), 
+		//msg += u::sprintf("[\"%s\"] \"%s\" | Type: \"%s\" | Index: %d\n | Options: (", a.first.c_str(), 
 			//a.second.str().c_str(), a.second.type().c_str(), a.second.index());
-		msg += u::format("[\"%s\"] \"%s\" | Type: \"%s\" | Options(", a.first.c_str(), 
+		msg += u::sprintf("[\"%s\"] \"%s\" | Type: \"%s\" | Options(", a.first.c_str(), 
 			a.second.str().c_str(), a.second.type().c_str());
 		
-		for(auto const& i : const_cast<field&>(a.second).opt()) msg += u::format("%d, ", static_cast<int>(i));
+		for(auto const& i : const_cast<field&>(a.second).opt()) msg += u::sprintf("%d, ", static_cast<int>(i));
 		
 		if(const_cast<field&>(a.second).opt().empty() == false) { msg.pop_back(); msg.pop_back(); }
-		msg += u::format(") | Name(  ");
+		msg += u::sprintf(") | Name(  ");
 		
-		for(auto const&i : const_cast<field&>(a.second).name()) msg += u::format("\"%s\", ", i.c_str());
+		for(auto const&i : const_cast<field&>(a.second).name()) msg += u::sprintf("\"%s\", ", i.c_str());
 		
 		if(const_cast<field&>(a.second).name().empty() == false) { 
 			msg.pop_back(); msg.pop_back(); }
 		
-		msg += u::format(")\n");
+		msg += u::sprintf(")\n");
 	}
 	msg.pop_back(); // get rip the last chaaracter
 	u::error::set_header(false); err(msg.c_str()); u::error::set_header(true);
@@ -76,7 +76,7 @@ d::obj::printv(const std::string msg_init) const
 { try {
 	std::string msg = msg_init;
 	
-	for(auto const& a: _field) msg += u::format("\"%s\" ,", a.second.str().c_str());
+	for(auto const& a: _field) msg += u::sprintf("\"%s\" ,", a.second.str().c_str());
 	
 	if(_field.empty() == false) { msg.pop_back(); msg.pop_back(); } // get rid the last 2 characters of string
 	u::error::set_header(false); err(msg.c_str()); u::error::set_header(true);
