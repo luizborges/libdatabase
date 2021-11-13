@@ -14,7 +14,7 @@ DLIB_NAME       = -lutilpp -ldatabasepp #-lerror -lfileUtil -lmemoryManager -lst
 ### USE THIS FLAG FOR PRODUCTION -Ofast
 #CFLAGS          = -Wall -g -Ofast -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # standard support for c++17 - necessay to use std::variant 
 ### USE  THIS FLAG FOR TEST -Og -> debugging -O0 normal
-CFLAGS          = -Wall -g -O0 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++17 # TEST -Og
+CFLAGS          = -Wall -g -O0 -DNDEBUG -Wno-variadic-macros -fPIC -Wl,--export-dynamic -std=c++2a # TEST -Og
 DLIB_STD        = -lm -lpthread -lpqxx -lpq #-lfcgi -lgc 
 DLIB            = $(DLIB_STD) $(DLIB_NAME)
 COMPILER_FLAGS  = $(CFLAGS) #$(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) # use $(DLIB_DIR_LPATH) $(DLIB_DIR_H_IPATH) when library is not in global environment

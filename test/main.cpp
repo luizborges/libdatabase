@@ -1,10 +1,16 @@
 #include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include <pqxx/pqxx>
 #include <util.hpp>
 #include <database.hpp>
 using namespace std;
+namespace d = database;
+namespace o = database_online;
 
 #define DATABASE_CONNECTION "dbname=pet user=borges password=JSG3bor_g873sqlptgs78b hostaddr=127.0.0.1 port=5432"
+#define DATABASE_CONNECTION_SECURITY "dbname=security user=borges password=JSG3bor_g873sqlptgs78b hostaddr=127.0.0.1 port=5432"
 /**
  selects:
   - to retry time in minutes in session:
@@ -16,101 +22,90 @@ pqxx::connection_base* CB;
 
 int main() {
  try {
-	 d::database_connection = "";
-	 cout << d::quote("pula", DATABASE_CONNECTION) << "\n";
-	 cout << d::quote("pula1") << "\n";
-	 cout << d::quote("pula2") << "\n";
-	 cout << d::quote("pula3") << "\n";
-	 cout << d::quote("pula4") << "\n";
-	 
-	 /*
- 	string ww = "   Mue12	   ";
- 	printf("\"%s\"\n", ww.c_str());
- 	u::trim(ww);
- 	u::tolower(ww = ww + "bizARO");
- 	printf("\"%s\"\n", ww.c_str());
- 	u::trim(ww);
- 	if(u::isalnum(ww)) printf("is alnum() = \"%s\"\n", ww.c_str());
- */
- 
- 
- 
-   /* pqxx::connection C("dbname = session user = borges password = JSG3bor_g873sqlptgs78b \
-    	hostaddr = 127.0.0.1 port = 5432");
-    if (C.is_open()) {
-    	std::cout << "Opened database successfully: " << C.dbname() << std::endl;
-    } else {
-    	std::cout << "Can't open database" << std::endl; return 1;
-    } 
-    pqxx::nontransaction N(C);
-    CB = (pqxx::connection_base*)&N;
-    string s1 = "SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '"; //'1')))/60 as time";
-	d::obj sh {{ {"id", { {}, {}} }, {"time", {{}, {" ", "ate", "date"}} }}, {},
-		//{{"init", { d::kind::CONCAT, {"select id, date as time from head where id = '", "id", "'"}}}}};
-		{{"init", { d::kind::CONCAT, {"select id, date from head where id = ", "id", ""}}}}};
-		//{{"init", { d::kind::CONCAT, {"select * from head where id = '", "id", "'"}}}}};
-		//{{"init", { {s1, "id", "')))/60 as time"}}}}};
-		//SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '1')))/60 as time;
-	
-	
-	printf("[%s]: \"%s\"\n", "time", sh["time"].get().c_str());
-	sh.run1({"init"}, {{"id", "123"}});
-	printf("[%s]: \"%s\"\n", "id", sh["id"].get().c_str());
-	printf("[%s]: \"%s\"\n", "time", sh["time"].get().c_str());
-	
-	sh.print();
-	
-	d::obj xp = {};
-	
-	xp = sh;
-	printf("xp\n");
-	xp.print();
-	printf("sh\n");
-	sh.print();
-	printf("\n===changeXX===\n");
-	sh["id"].set() = "ok";
-	printf("xp\n");
-	xp.print();
-	printf("sh\n");
-	sh.print();
-	//string str = ((pqxx::connection_base*)CB)->quote("xupeta");
-	string str = CB->quote("xus");
-	printf("%s\n", str.c_str());
-	if(sh.empty()) printf("sh is empty\n");
-	else printf("sh is NOT empty\n");
-	d::table table(sh);
-	table.print();
-	d::sql sql {{"select * from head"}};
-	printf("refresh\n");
-	sh["id"].set() = "123";
-	table.refresh(N, sql, { std::move(sh) });
-	d::commit(N);
-	table.print();
-	sh.print();
-	if(sh.empty()) printf("sh is empty\n");
-	else printf("sh is NOT empty\n");
-	/*printf("[%s]: \"%s\"\n", "id", table[0]["id"].get().c_str());
-	printf("[%s]: \"%s\"\n", "time", table[0]["time"].get().c_str());
-	
-	printf("for range\n");
-	for(auto& o : table) {
-		for(auto& f : o)
-			printf("[%s]: \"%s\"\n", f.first.c_str(), f.second.get().c_str());
-	}*/
-	
-	/*
-	d::obj ss {"session", {"diff"}};
-	ss.select("SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - (select date from head where id = '"+sh["id"].get()+"')))/60;",
-		{{"diff"}});
+	u::error::set_trace();
+	d::database_connection = DATABASE_CONNECTION;
+	// d::database_connection = DATABASE_CONNECTION_SECURITY;
 
-	printf("diff: \"%s\"\n", ss["diff"].get().c_str());
+	o::Table t = { "category", { { "bind_category_product_type", { "category_id", "id" } } } };
+
+	o::init_database_graph();
+	// decltype(o::database_graph) db_graph = { { "category", { "bind_category_product_type", { "category_id", "id" } } }};
+	decltype(o::database_graph) db_graph = { { "category", { "category", { { "bind_category_product_type", { "category_id", "id" } } } } }, { "bind_category_product_type", { "bind_category_product_type", { { "category", { "id", "category_id" } }, { "product_type", { "id", "product_type_id" } } } } }, { "users", { "users", { { "person", { "email1", "person_email1" } }, { "person", { "id", "person_id" } } } } }, { "product_type", { "product_type", { { "bind_category_product_type", { "product_type_id", "id" } }, { "product", { "produt_type_id", "id" } } } } }, { "product", { "product", { { "product_type", { "id", "produt_type_id" } }, { "sale", { "id", "sale_id" } } } } }, { "payment_type", { "payment_type", { { "sale", { "payment_type_id", "id" } } } } }, { "person", { "person", { { "users", { "person_email1", "email1" } }, { "users", { "person_id", "id" } }, { "sale", { "client_id", "id" } }, { "sale", { "seller_id", "id" } } } } }, { "sale", { "sale", { { "product", { "sale_id", "id" } }, { "payment_type", { "id", "payment_type_id" } }, { "person", { "id", "client_id" } }, { "person", { "id", "seller_id" } } } } } };
+
+	// for(const auto& [tname, table] : o::database_graph) {
+	for(const auto& [tname, table] : db_graph) {
+		cout << tname << "\n";
+		for(const auto& [foreign_table, col_name] : table.foreign_table) {
+			const auto& [fcol, col] = col_name;
+			cout << "\t" << foreign_table << "." << fcol << " = " << tname << "." << col << "\n";
+		}
+	}
+
+	std::cout << "initing checking...\n";
+	for(auto [tn, t] : o::database_graph) {
+		if(!db_graph.count(tn)) std::cout << "FUCK ERROR TN";
+		if(t.name != o::database_graph.at(tn).name) std::cout << "FUCK ERROR T.NAME";
+
+		for(auto [ft, col] : t.for_range_foreign_table()) {
+			if(!db_graph.at(tn).foreign_table.count(ft)) std::cout << "FUCK ERROR FT";
+
+			auto [x, y] = col;
+			bool c = false;
+			for(auto [qt, qcol] : db_graph.at(tn).foreign_table) {
+				auto [X, Y] = qcol;
+				if(x == X && y == Y && ft == qt) c = true;
+			}
+			if(!c) std::cout << "FUCK ERROR COL";
+		}
+	}
+	std::cout << "ending checking...\n";
 	
-	ss.select("SELECT CURRENT_TIMESTAMP;", {{"diff"}});
-	d::obj s2 {"head", {"id", "date"}};
-	s2.insert({{"id", "111"}, {"date", ss["diff"].get()}});
-	C.disconnect ();*/
+	// std::cout << "\n\"" << o::join({"payment_type", "category", "product_type", "sale"}) << "\"\n";
+	// std::cout << "\n\"" << o::join({"payment_type", "category", "product_type"}) << "\"\n";
+	// std::cout << "\n" << o::join({"category", "product_type"}) << "\"\n";
+	// std::cout << "\n" << o::join({"person", "users"}) << "\"\n";
+	// std::cout << "\n" << o::join({"person", "category"}) << "\"\n";
+	// std::cout << "\n" << o::join({"users", "category"}) << "\"\n";
+	// std::cout << "\n" << o::join({"role", "users"}) << "\"\n";
+	// std::cout << "\n" << o::join({"role", "users", "system"}) << "\"\n";
+
+	auto person = database_obj_str::map_table<std::unordered_map>("person");
+	auto person2 = database_offline::load_table("person");
+
+	// for(auto& [key, field] : person)
+	// 	field.print();
+	
+	// person.at("name") = "Luiz Alberto Borges Jr.";
+
+	// for(auto& [key, field] : person)
+	// 	field.print();
+	
+	// auto R = database::selectr1("SELECT * FROM person where id=16;");
+
+	// for(auto i : R)
+	// 	person.at(u::to_str(i.name())) = i.is_null() ? "" : i.as<std::string>();
+
+	// // for(auto& [key, field] : person)
+	// // 	field.print();
+	
+	// person.at("phone1") = "31975339495";
+	// person.at("email2") = "mariaehumsonhoumaeternamagiaumaforcaquenosalerta@ufmg.br";
+
+	// database_obj_str::update(person);
+	// database_obj_str::del(person);
+	// person.at("name") = "MARIA JOAQUINA";
+	// person.at("email1") = "maria@uol.com";
+	// person.at("phone1") = "31975339498";
+	// person.at("birth") = "24/10/1958";
+	// database_obj_str::insert(person);
+	
+	std::cout << database_obj_str::map_table_str("person") << "\n";
+
+	std::cout << "\n\n====================================================\n\n";
+	std::cout << database_online::init_database_graph_str() << "\n";
  } catch (const std::exception &e) {
 	err(e.what());
+	// cout << u::error::get_trace();
 	return 1;
  }
 }
