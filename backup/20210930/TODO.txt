@@ -1,0 +1,22 @@
+
+>> Refatorar a classe sql e passar ela para template, para aumentar o nível de generalidade dela.
+exemplo: a função:
+std::string d::sql::make_query_concat(const std::vector<std::unordered_map<std::string, field>>& V)
+Fazer um template dela, para ela receber, tanto lista, vetor e demais conteiners.
+Fazer um template para ela, mesmo de cima, para ela não receber somente std::unordered_map<...>, mas qualquer outra estrutura
+similar, map<...>, por exemplo.
+
+>> Refatorar na classe obj as seguinte estruturas:
+std::vector<std::string> _primary_key = {};
+std::unordered_map<std::string, sql> _sql_real = {};
+std::unordered_map<std::string, std::vector<std::string>> _sql_fake = {};
+Para: shared_ptr<std::unordered_map<std::string, sql>> e shared_ptr<std::unordered_map<std::string, std::vector<std::string>>> e
+shared_ptr<vector<std::string>>.
+Isto se dá, pois se os obj forem do mesmo tipo, não faz setido realizar diversas cópias desta estrutura, já que todas são idênticas.
+Logo, o que faz sentido é todos os obj, do mesmo tipo, terem o mesmo conjuto de sql, para melhroar a performance.
+
+>> inicialmente a biblioteca atenderá apenas o banco de dados postgresql
+
+> A classe "u::field" não tem o tipo interno 'bool' para val.
+Inserir este tipo de dados no padrão. Não inseri pois estava dando erro, relacionado com o tipo std::string
+

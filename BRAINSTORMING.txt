@@ -1,0 +1,8 @@
+>> anotar todas as ideias relativas a criaçao de uma funçao sql que faz o select sem necessitar de realizar o inner join explicitamente.
+- ja tenho os sqls que encontram todas as foreign keys das tabelas, com as respectivas tabelas e colunas que sao referenciadas.
+- pode ser feito de algumas formas:
+* totalmente dinamico
+* semi dinamico
+* manual
+- uma funçao pode ser responsavel por fazer o grafo ja no começo do programa do banco de dados, para nao precisar ficar fazendo varios sqls para descobrir todas as referencias entre uma tabela e outra.
+## depois escrevo mais ideias que eu tive - glorias a Deus.
